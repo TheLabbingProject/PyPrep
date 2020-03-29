@@ -1,0 +1,9 @@
+1. Gen README.md
+2. Learn how to add images to README
+3. for design:
+    1. outdir
+    2. cur_TR
+    3. n_frames (ntpts)
+    4. n_voxels
+    5. epi_file
+    6. highres_brain
