@@ -1,19 +1,24 @@
-import glob, os, shutil
-from PyPrep.Code import (
+import glob
+import nibabel as nib
+import os
+import shutil
+import subprocess
+import time
+import tkinter as tk
+from BidsConverter.Code import list_files
+from bids_validator import BIDSValidator
+from pathlib import Path
+from PyPrep.code import (
     Mrtrix3_methods as MRT_Methods,
     Preproc_Methods as Methods,
 )
-from BidsConverter.Code import ListFiles
-import subprocess
-from bids_validator import BIDSValidator
-import nibabel as nib
-import tkinter as tk
+from PyPrep.atlases.atlases import Atlases
+from PyPrep.templates.templates import Templates
 from tkinter import filedialog
-import time
 
-MOTHER_DIR = "/Users/dumbledore/Desktop/bids_dataset"
-ATLAS = "/Users/dumbeldore/Desktop/megaatlas"
-DESIGN = os.path.abspath("./PyPrep/templates/design.fsf")
+MOTHER_DIR = Path("/Users/dumbeldore/Desktop/bids_dataset")
+ATLAS = str(Atlases.megaatlas.value)
+DESIGN = str(Templates.design.value)
 
 
 class BidsPrep:
@@ -23,7 +28,7 @@ class BidsPrep:
         seq: str,
         subj: str = None,
         out_dir: str = None,
-        atlas: str = None,
+        atlas: str = ATLAS,
         design: str = DESIGN,
     ):
         """
@@ -35,7 +40,7 @@ class BidsPrep:
             subj {str} -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
             atlas {str} -- [path to atlas` directory. should contain "Highres" and "Labels" files.]
         """
-        self.mother_dir = mother_dir
+        self.mother_dir = str(mother_dir)
         self.subjects = list()
         self.seq = seq
         self.design = design
@@ -114,7 +119,7 @@ class BidsPrep:
             if not os.path.isdir(new_d):
                 os.makedirs(new_d)
         print(f"Sorted output directory to resemble input, BIDS compatible one:")
-        ListFiles.list_files(self.out_dir)
+        list_files.list_files(self.out_dir)
 
     def check_file(self, in_file):
         if os.path.isfile(in_file):
@@ -228,15 +233,36 @@ class BidsPrep:
         ):
             self.coregister(subj, in_file, ref, proc)
         print("Generated subject-space atlas:\n")
-        ListFiles.list_files(f"{self.out_dir}/{subj}")
+        list_files.list_files(f"{self.out_dir}/{subj}")
 
     def load_transforms(self, feat: str):
-        reg_dir = f"{feat}/reg"
+        reg_dir = Path(f"{feat}/reg")
         for f in os.listdir(reg_dir):
             if "highres2example_func.mat" in f:
-                highres2func_aff = f"{reg_dir}/{f}"
+                highres2func_aff = str(reg_dir / f)
             elif "standard2highres.mat" in f:
-                standard2highres_aff = f"{reg_dir}/{f}"
+                standard2highres_aff = str(reg_dir / f)
+            elif f == "example_func.nii":
+                epi_file = str(reg_dir / f)
+            elif f == "highres.nii":
+                highres = str(reg_dir / f)
+        return epi_file, highres, highres2func_aff, standard2highres_aff
+
+    def generate_atlas(
+        self,
+        subj: str,
+        epi_file: str,
+        highres: str,
+        highres2func: str,
+        standard2highres: str,
+    ):
+        out_dir = str(Path(self.out_dir) / subj / "atlases")
+        fnt = Methods.transform_atlas2highres(
+            self.highres_atlas, highres, standard2highres, out_dir
+        )
+        highres_atlas = fnt.run()
+        flt = Methods.atlas2epi(epi_file, highres_atlas, out_dir, highres2func)
+        flt.run()
 
     def run(self):
         """
@@ -246,7 +272,6 @@ class BidsPrep:
         print(f"Input directory: {self.mother_dir}")
         print(f"Output directory: {self.out_dir}")
         self.check_bids(self.mother_dir)
-
         for subj in self.subjects:
             t = time.time()
             self.set_output_dir(subj)
@@ -263,6 +288,15 @@ class BidsPrep:
             if func:
                 self.MotionCorrect(subj, func, "func")
                 feat = self.prep_feat(subj, func, highres_brain)
+                (
+                    epi_file,
+                    highres,
+                    highres2func,
+                    standard2highres,
+                ) = self.load_transforms(feat)
+                self.generate_atlas(
+                    subj, epi_file, highres, highres2func, standard2highres
+                )
             if dwi:
                 self.MotionCorrect(subj, dwi, "dwi")
                 feat = self.prep_feat(subj, dwi, highres_brain)
@@ -271,6 +305,11 @@ class BidsPrep:
             elapsed = (time.time() - t) / 60
             print("%s`s preproceesing procedures took %.2f minutes." % (subj, elapsed))
 
+
+if __name__ == "__main__":
+    bids_dir = "/Users/dumbeldore/Desktop/bids_dataset"
+    t = BidsPrep(mother_dir=bids_dir, seq="func", atlas=ATLAS)
+    t.run()
 
 # to run ICA-AROMA:
 # 1. bet T1

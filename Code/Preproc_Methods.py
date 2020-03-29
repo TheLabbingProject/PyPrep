@@ -7,6 +7,7 @@ from nipype.interfaces import fsl, mrtrix3 as mrt
 import dipy.denoise.noise_estimate as ne
 from nilearn.image import resample_to_img
 import shutil
+from pathlib import Path
 
 CAT_BATCH = r"/home/gal/Brain_Networks/Derivatives/Scripts/cat12_template.m"
 FSF_TEMP = r"/home/gal/Brain_Networks/Derivatives/Scripts/feat_preproc_template.fsf"
@@ -761,12 +762,68 @@ class apply_warp:
         aw.run()
 
 
+class transform_atlas2highres:
+    def __init__(self, atlas_file: str, highres: str, aff: str, out_dir: str):
+        self.atlas = atlas_file
+        self.highres = highres
+        self.aff = aff
+        self.out_dir = Path(out_dir)
+
+    def init_fsl(self):
+        fnt = fsl.FNIRT()
+        fnt.inputs.in_file = self.atlas
+        fnt.inputs.affine_file = self.aff
+        fnt.inputs.ref_file = self.highres
+        fnt.inputs.warped_file = str(self.out_dir / "atlas2highres.nii")
+        fnt.inputs.fieldcoeff_file = str(self.out_dir / "atlas2highres_fieldcoeff.nii")
+        fnt.inputs.field_file = str(self.out_dir / "atlas2highres_field.nii")
+        return fnt
+
+    def run(self):
+        fnt = self.init_fsl()
+        print(
+            "Performing nonlinear registration from atlas to subject's structural image..."
+        )
+        print(f"Input: {self.atlas}")
+        print(f"Output directory: {self.out_dir}")
+        if not os.path.isfile(fnt.inputs.warped_file):
+            fnt.run()
+        return fnt.inputs.warped_file
+
+
+class atlas2epi:
+    def __init__(self, epi_file: str, highres_atlas: str, out_dir: str, aff: str):
+        self.epi = epi_file
+        self.atlas = highres_atlas
+        self.out_dir = Path(out_dir)
+        self.aff = aff
+
+    def init_fsl(self):
+        flt = fsl.FLIRT()
+        flt.inputs.in_file = self.atlas
+        flt.inputs.reference = self.epi
+        flt.inputs.apply_xfm = True
+        flt.inputs.in_matrix_file = self.aff
+        flt.inputs.out_file = str(self.out_dir / "atlas2epi.nii")
+        return flt
+
+    def run(self):
+        flt = self.init_fsl()
+        print(
+            "Performing linear registration from highres-space atlas to subject's epi image..."
+        )
+        print(f"Input: {self.atlas}")
+        print(f"Output directory: {self.out_dir}")
+        if not os.path.isfile(flt.inputs.out_file):
+            flt.run()
+
+
 class apply_XFM:
     def __init__(self, in_file: str, ref: str, out_file: str):
         self.in_file = in_file
         self.ref = ref
         self.out_file = out_file
-        self.out_mat = out_file.replace("nii.gz", "mat")
+        self.out_mat = out_file.replace("nii", "mat")
 
     def init_fsl(self, in_file: str, ref: str, out_file: str, out_mat: str):
         ax = fsl.FLIRT()
