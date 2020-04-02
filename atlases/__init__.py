@@ -1,2 +1,1 @@
-from PyPrep.atlases.atlases import Atlases
-
+from atlases.atlases import Atlases

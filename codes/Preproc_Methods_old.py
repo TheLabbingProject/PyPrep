@@ -470,54 +470,54 @@ class feat_design:
         return self.subj_design
 
 
-class FLIRT:
-    def __init__(self, in_file: str, ref: str, out_dir: str, proc: int):
-        """
-        FLIRT linear transformation
-        @param in_file: image to be transformed
-        @param ref: image to transform into
-        @param out_dir: directory for outputs
-        @param type: 0 for highres2lowres, 1 for atlasHighres2highres, 2 for atlasLabels2highres
-        @return:
-        """
-        self.in_file, self.ref, self.out_dir, self.proc = in_file, ref, out_dir, proc
-        self.init_output()
+# class FLIRT:
+#     def __init__(self, in_file: str, ref: str, out_dir: str, proc: int):
+#         """
+#         FLIRT linear transformation
+#         @param in_file: image to be transformed
+#         @param ref: image to transform into
+#         @param out_dir: directory for outputs
+#         @param type: 0 for highres2lowres, 1 for atlasHighres2highres, 2 for atlasLabels2highres
+#         @return:
+#         """
+#         self.in_file, self.ref, self.out_dir, self.proc = in_file, ref, out_dir, proc
+#         self.init_output()
 
-    def init_output(self):
-        if self.proc == 0:
-            self.out_file = f"{self.out_dir}/Highres2Lowres_linear.nii"
-            self.out_mat = f"{self.out_dir}/Highres2Lowres_linear.mat"
-            print("Running linear transformation from Highres to Lowres:")
-        elif self.proc == 1:
-            self.out_file = f"{self.out_dir}/HighresAtlas2Highres_linear.nii"
-            self.out_mat = f"{self.out_dir}/HighresAtlas2Highres_linear.mat"
-            print("Running linear transformation from Atlas to Highres:")
-        elif self.proc == 2:
-            self.out_file = f"{self.out_dir}/LabelsAtlas2Highres_linear.nii"
-            self.out_mat = f"{self.out_dir}/LabelsAtlas2Highres_linear.mat"
-            print("Running linear transformation from Atlas to Highres:")
+#     def init_output(self):
+#         if self.proc == 0:
+#             self.out_file = f"{self.out_dir}/Highres2Lowres_linear.nii"
+#             self.out_mat = f"{self.out_dir}/Highres2Lowres_linear.mat"
+#             print("Running linear transformation from Highres to Lowres:")
+#         elif self.proc == 1:
+#             self.out_file = f"{self.out_dir}/HighresAtlas2Highres_linear.nii"
+#             self.out_mat = f"{self.out_dir}/HighresAtlas2Highres_linear.mat"
+#             print("Running linear transformation from Atlas to Highres:")
+#         elif self.proc == 2:
+#             self.out_file = f"{self.out_dir}/LabelsAtlas2Highres_linear.nii"
+#             self.out_mat = f"{self.out_dir}/LabelsAtlas2Highres_linear.mat"
+#             print("Running linear transformation from Atlas to Highres:")
 
-    def init_fsl(self):
-        flt = fsl.FLIRT()
-        flt.inputs.in_file = self.in_file
-        flt.inputs.reference = self.ref
-        flt.inputs.bins = 256
-        flt.inputs.cost = "corratio"
-        flt.inputs.searchr_x = [-90, 90]
-        flt.inputs.searchr_y = [-90, 90]
-        flt.inputs.searchr_z = [-90, 90]
-        flt.inputs.dof = 12
-        flt.inputs.interp = "trilinear"
-        flt.inputs.out_file = self.out_file
-        flt.inputs.output_type = "NIFTI"
-        flt.inputs.out_matrix_file = self.out_mat
-        return flt
+#     def init_fsl(self):
+#         flt = fsl.FLIRT()
+#         flt.inputs.in_file = self.in_file
+#         flt.inputs.reference = self.ref
+#         flt.inputs.bins = 256
+#         flt.inputs.cost = "corratio"
+#         flt.inputs.searchr_x = [-90, 90]
+#         flt.inputs.searchr_y = [-90, 90]
+#         flt.inputs.searchr_z = [-90, 90]
+#         flt.inputs.dof = 12
+#         flt.inputs.interp = "trilinear"
+#         flt.inputs.out_file = self.out_file
+#         flt.inputs.output_type = "NIFTI"
+#         flt.inputs.out_matrix_file = self.out_mat
+#         return flt
 
-    def run(self):
-        flt = self.init_fsl()
-        print(flt.cmdline)
-        flt.run()
-        return flt.inputs.out_matrix_file
+#     def run(self):
+#         flt = self.init_fsl()
+#         print(flt.cmdline)
+#         flt.run()
+#         return flt.inputs.out_matrix_file
 
 
 class Create_Atlas:
@@ -789,6 +789,28 @@ class transform_atlas2highres:
         if not os.path.isfile(fnt.inputs.warped_file):
             fnt.run()
         return fnt.inputs.warped_file
+
+def FNIRT(in_file:str, ref: str, out_file:str, aff:str =None):
+    fnt = fsl.FNIRT()
+    fnt.inputs.in_file = in_file
+    fnt.inputs.ref_file = ref
+def FLIRT(in_file: str, ref: str, out_file: str, aff:str =None):
+    flt = fsl.FLIRT()
+    flt.inputs.in_file = in_file
+    flt.inputs.reference = ref
+    flt.inputs.out_file = out_file
+    flt.inputs.out_matrix_file = out_file.replace(".nii", ".mat")
+    if aff:
+        flt.inputs.apply_xfm = True
+        flt.inputs.in_matrix_file = aff
+    flt.inputs.bins = 256
+    flt.inputs.cost = "corratio"
+    flt.inputs.searchr_x = [-90, 90]
+    flt.inputs.searchr_y = [-90, 90]
+    flt.inputs.searchr_z = [-90, 90]
+    flt.inputs.dof = 12
+    flt.inputs.interp = "trilinear"
+    return flt
 
 
 class atlas2epi:

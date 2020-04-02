@@ -5,65 +5,65 @@ import shutil
 import subprocess
 import time
 import tkinter as tk
-from BidsConverter.Code import list_files
 from bids_validator import BIDSValidator
 from pathlib import Path
-from PyPrep.code import (
+from codes import (
     Mrtrix3_methods as MRT_Methods,
-    Preproc_Methods as Methods,
+    prep_functions as Methods,
 )
-from PyPrep.atlases.atlases import Atlases
-from PyPrep.templates.templates import Templates
+from atlases.atlases import Atlases
+from templates.templates import Templates
 from tkinter import filedialog
 
 MOTHER_DIR = Path("/Users/dumbeldore/Desktop/bids_dataset")
-ATLAS = str(Atlases.megaatlas.value)
-DESIGN = str(Templates.design.value)
+ATLAS = Atlases.megaatlas.value
+DESIGN = Templates.design.value
 
 
 class BidsPrep:
     def __init__(
         self,
-        mother_dir: str,
+        mother_dir: Path,
         seq: str,
         subj: str = None,
-        out_dir: str = None,
-        atlas: str = ATLAS,
-        design: str = DESIGN,
+        out_dir: Path = None,
+        atlas: Path = ATLAS,
+        design: Path = DESIGN,
     ):
         """
         Initiate the BIDS preprocessing class with either a specific subject or None = all subjects (default)
         Arguments:
-            mother_dir {str} -- [Path to a BIDS compliant directory (should contain "mother_dir/sub-xx")]
+            mother_dir {Path} -- [Path to a BIDS compliant directory (should contain "mother_dir/sub-xx")]
             seq (str) -- ["func","dwi","anat". Specify the modality of preprocessing you would like to produce.]
         Keyword Arguments:
-            subj {str} -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
-            atlas {str} -- [path to atlas` directory. should contain "Highres" and "Labels" files.]
+            subj (str) -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
+            atlas (Path) -- [path to atlas` directory. should contain "Highres" and "Labels" files.] (default: '/atlases/megaatlas')
+            design (Path) -- [Path to FEAT's design template.] (default: {'/templates/design.fsf'})
         """
-        self.mother_dir = str(mother_dir)
+        self.mother_dir = Path(mother_dir)
         self.subjects = list()
         self.seq = seq
-        self.design = design
+        self.design = Path(design)
         if subj:
             self.subjects.append(subj)
         else:
             self.subjects = [
-                cur_subj.split(os.sep)[-1]
+                Path(cur_subj).name
                 for cur_subj in glob.glob(f"{self.mother_dir}/sub-*")
             ]
         if not out_dir:
-            out_dir = f"{os.path.dirname(mother_dir)}/derivatives"
+            out_dir = Path(self.mother_dir.parent / "derivatives")
         self.out_dir = out_dir
-        self.atlas = atlas
+        self.atlas = Path(atlas)
         self.subjects.sort()
         if not atlas:
             self.highres_atlas, self.labels_atlas = self.get_atlas()
         else:
-            for f in os.listdir(atlas):
-                if "highres.nii" in f:
-                    self.highres_atlas = f"{atlas}/{f}"
-                elif "Labels.nii" in f:
-                    self.labels_atlas = f"{atlas}/{f}"
+            for f in atlas.iterdir():
+                if "highres.nii" in str(f):
+                    self.highres_atlas = f
+                elif "Labels.nii" in str(f):
+                    self.labels_atlas = f
 
     def get_atlas(self):
         """
@@ -72,14 +72,16 @@ class BidsPrep:
         if not self.atlas:
             root = tk.Tk()
             root.withdraw()
-            atlas = filedialog.askdirectory(
-                title="Please choose the folder containing your megaatlas files."
+            atlas = Path(
+                filedialog.askdirectory(
+                    title="Please choose the folder containing your megaatlas files."
+                )
             )
-        for f in os.listdir(atlas):
-            if "highres.nii" in f:
-                highres_atlas = f"{atlas}/{f}"
-            elif "Labels.nii" in f:
-                labels_atlas = f"{atlas}/{f}"
+        for f in atlas.iterdir():
+            if "highres.nii" in str(f):
+                highres_atlas = f
+            elif "Labels.nii" in str(f):
+                labels_atlas = f
         return highres_atlas, labels_atlas
 
     def check_bids(self, mother_dir=None):
@@ -109,9 +111,9 @@ class BidsPrep:
         """
         Manipulate the output directory to resemble the inpur, BIDS compatible directory.
         """
-        in_name = self.mother_dir.split(os.sep)[-1]
-        out_name = self.out_dir.split(os.sep)[-1]
-        dirs = glob.glob(f"{self.mother_dir}/{subj}/*")
+        in_name = self.mother_dir.name
+        out_name = self.out_dir.name
+        dirs = glob.glob(f"{Path(self.mother_dir / subj)}/*")
         dirs.append(f"{os.path.dirname(dirs[0])}/atlases")
         dirs.append(f"{os.path.dirname(dirs[0])}/scripts")
         for d in dirs:
@@ -119,61 +121,102 @@ class BidsPrep:
             if not os.path.isdir(new_d):
                 os.makedirs(new_d)
         print(f"Sorted output directory to resemble input, BIDS compatible one:")
-        list_files.list_files(self.out_dir)
+        Methods.list_files(str(self.out_dir))
 
-    def check_file(self, in_file):
-        if os.path.isfile(in_file):
-            return False
-        else:
-            return True
+    def check_file(self, in_file: Path):
+        """
+        Checks wether a file exists
+        Arguments:
+            in_file {Path} -- [path of file to check]
 
-    def BrainExtract(self, subj: str, in_file: str, seq: str = "anat"):
+        Returns:
+            [bool] -- [True or False]
+        """
+        in_file = Path(in_file)
+        return not in_file.is_file()
+
+    def GenFieldMap(self, subj: str, AP: Path, PA: Path, outdir: Path):
+        """
+        Generate Field Maps using dwi's AP and phasediff's PA scans
+        Arguments:
+            AP {Path} -- [path to dwi's AP file]
+            PA {Path} -- [path to PA phasediff file]
+            outdir {Path} -- [path to output directory (outdir/sub-xx/fmap)]
+        """
+        merged = outdir / "merged_phasediff.nii"
+        if not merged.exists():
+            merger = Methods.MergePhases(AP, PA, merged)
+            merger.run()
+        datain = outdir / "datain.txt"
+        if not datain.exists():
+            Methods.GenDatain(AP, PA, datain)
+        fieldmap = outdir / "fieldmap.nii"
+        fieldmap_rads = fieldmap.with_name(fieldmap.stem + "_rad.nii")
+        fieldmap_mag = fieldmap.with_name(fieldmap.stem + "_magnitude.nii")
+        if not fieldmap_mag.exists():
+            fieldmap_mag, fieldmap_rad = Methods.TopUp(merged, datain, fieldmap)
+        self.BrainExtract(subj, fieldmap_mag, "fmap")
+
+    def BrainExtract(self, subj: str, in_file: Path, seq: str = "anat"):
         """
         Perform brain extraction using FSL's bet.
         *** Need improvement - maybe use cat12
         Arguments:
             subj {str} -- ['sub-xx' in a BIDS compatible directory]
-            in_file {str} -- [Path to file to perform brain extraction on.]
+            in_file {Path} -- [Path to file to perform brain extraction on.]
         Keyword Arguments:
             subdir {str} -- ['anat','dwi' or 'func' perform brain extraction for an image in specific subdirectory in mother_dir.] (default: {'anat'})
         """
-        f_name = in_file.split(os.sep)[-1]
-        new_f = os.path.splitext(os.path.splitext(f_name)[0])[0]
+        in_file = Path(in_file)
+        f_name = Path(in_file.name)
+        new_f = Path(f_name.stem).stem + "_brain.nii"
         if seq == "anat":
-            shutil.copy(in_file, f"{self.out_dir}/{subj}/{seq}")
-        out_file = f"{self.out_dir}/{subj}/{seq}/{new_f}_brain.nii"
+            shutil.copy(in_file, Path(self.out_dir / subj / seq))
+        out_file = Path(self.out_dir / subj / seq / new_f)
         if self.check_file(out_file):
             print("Performing brain extractoin using FSL`s bet")
             print(f"Input file: {in_file}")
             print(f"Output file: {out_file}")
-            bet = Methods.run_BET(in_file, out_file)
-            bet = bet.run()
+            bet = Methods.BetBrainExtract(in_file, out_file)
+            bet.run()
+        else:
+            print("Brain extraction already done.")
+            print(f"Brain-extracted file is at {out_file}")
         return out_file
 
-    def MotionCorrect(self, subj: str, in_file: str, seq: str = "func"):
+    def MotionCorrect(self, subj: str, in_file: Path, seq: str = "func"):
         """
         Perform motion correction with FSL's MCFLIRT
         Arguments:
             subj {str} -- ['sub-xx' in a BIDS compatible directory]
-            in_file {str} -- [Path to a 4D file to perform motion correction (realignment) on.]
+            in_file {Path} -- [Path to a 4D file to perform motion correction (realignment) on.]
 
         Keyword Arguments:
             seq {str} -- ['func' or 'dwi', Modality to perform motion correction on.] (default: {"func"})
         """
+
+        f_name = Path(in_file).name
+        new_f = Path(Path(f_name).stem).stem + "_MotionCorrected.nii"
+        out_file = self.out_dir / subj / seq / new_f
         img = nib.load(in_file)
         is_4d = img.ndim > 3
         if is_4d:
-            f_name = in_file.split(os.sep)[-1]
-            new_f = os.path.splitext(os.path.splitext(f_name)[0])[0]
-            out_file = f"{self.out_dir}/{subj}/{seq}/{new_f}_MotionCorrected.nii"
             if self.check_file(out_file):
-                mot_cor = Methods.MotionCorrection(in_file=in_file, out_file=out_file)
+                mot_cor = Methods.MotionCorrect(in_file=in_file, out_file=out_file)
                 print("Performing motion correction using FSL`s MCFLIRT")
                 print(f"Input file: {in_file}")
                 print(f"Output file: {out_file}")
-                mcflt = mot_cor.run()
-                # return mcflt
+                mot_cor.run()
+            else:
+                print("Motion correction already done.")
+                print(f"Motion-corrected file is at {out_file}")
+        else:
+            print(
+                "Input files isn't a 4D image, therefore isn't elligable for motion correction."
+            )
+        return out_file
 
+    ##########
     def prep_feat(self, subj: str, epi_file: str, highres: str):
         """
         Perform FSL's feat preprocessing
@@ -242,10 +285,9 @@ class BidsPrep:
                 highres2func_aff = str(reg_dir / f)
             elif "standard2highres.mat" in f:
                 standard2highres_aff = str(reg_dir / f)
-            elif f == "example_func.nii":
-                epi_file = str(reg_dir / f)
             elif f == "highres.nii":
                 highres = str(reg_dir / f)
+        epi_file = str(Path(feat) / "mean_func.nii")
         return epi_file, highres, highres2func_aff, standard2highres_aff
 
     def generate_atlas(
@@ -256,12 +298,14 @@ class BidsPrep:
         highres2func: str,
         standard2highres: str,
     ):
+
         out_dir = str(Path(self.out_dir) / subj / "atlases")
-        fnt = Methods.transform_atlas2highres(
-            self.highres_atlas, highres, standard2highres, out_dir
-        )
-        highres_atlas = fnt.run()
-        flt = Methods.atlas2epi(epi_file, highres_atlas, out_dir, highres2func)
+        atlas_in_highres = str(Path(out_dir) / "atlas2subj_highres_Linear.nii")
+        flt1 = Methods.FLIRT(self.highres_atlas, highres, out_dir, standard2highres)
+        flt1.run()
+
+        atlas_in_epi = str(Path(out_dir) / "atlas2subj_epi_Linear.nii")
+        flt2 = Methods.lin_atlas2subj(atlas_in_highres, epi_file, out_dir, highres2func)
         flt.run()
 
     def run(self):
@@ -286,7 +330,7 @@ class BidsPrep:
             ) = Methods.load_initial_files(self.mother_dir, subj)
             highres_brain = self.BrainExtract(subj, anat)
             if func:
-                self.MotionCorrect(subj, func, "func")
+                # motion_corrected = self.MotionCorrect(subj, func, "func")
                 feat = self.prep_feat(subj, func, highres_brain)
                 (
                     epi_file,
@@ -298,8 +342,17 @@ class BidsPrep:
                     subj, epi_file, highres, highres2func, standard2highres
                 )
             if dwi:
-                self.MotionCorrect(subj, dwi, "dwi")
+                # motion_corrected = self.MotionCorrect(subj, dwi, "dwi")
                 feat = self.prep_feat(subj, dwi, highres_brain)
+                (
+                    epi_file,
+                    highres,
+                    highres2func,
+                    standard2highres,
+                ) = self.load_transforms(feat)
+                self.generate_atlas(
+                    subj, epi_file, highres, highres2func, standard2highres
+                )
             # self.gen_subj_atlas(subj, highres_brain, dwi)
 
             elapsed = (time.time() - t) / 60
