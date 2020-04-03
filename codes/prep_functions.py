@@ -6,6 +6,7 @@ from nilearn.image import index_img
 import sys
 import subprocess
 import json
+import numpy as np
 
 
 def check_nifti_output():
@@ -14,7 +15,7 @@ def check_nifti_output():
     fsldir = Path(os.getenv("FSLDIR"))
     fslconf_dir = Path(Path.home() / ".fslconf")
     fslconf_file = fslconf_dir / "fsl.sh"
-    if cur_output != "Nifti":
+    if cur_output != "NIFTI":
         if not fslconf_dir.exists():
             fslconf_dir.mkdir()
         with fslconf_file.open(mode="w+") as conf_file:
@@ -26,6 +27,59 @@ def check_nifti_output():
             1. Open the file located at: {fslconf_file}
             2. Change the FSLOUTTYPE variable to the desired output format."""
         )
+    else:
+        print("""FSLOUTTYPE is set to NIFTI (.nii)""")
+
+
+def load_initial_files(mother_dir: Path, sub: str):
+    """
+    Initiate relevant files for preprocessing procedures. Note that {mother_dir} must be a BIDS compatible directory.
+    Arguments:
+        mother_dir {str} -- [Path to a BIDS compliant directory (should contain "mother_dir/sub-xx")]
+        sub {str} -- ['sub-xx']
+
+    Returns:
+        [type] -- [anat, func, sbref, dwi, bvec, bval, phasediff files from subject's directory.]
+    """
+    folder_name = mother_dir / sub
+    dwi_folder = folder_name / "dwi"
+    anat_folder = folder_name / "anat"
+    fmap_folder = folder_name / "fmap"
+    func_folder = folder_name / "func"
+    anat_file = func_file = sbref_file = dwi_file = bvec = bval = phasediff = None
+    for file in dwi_folder.iterdir():
+        file = str(file)
+        if "dwi" in file:
+            if "dwi.nii" in file:
+                dwi_file = file
+            elif "bvec" in file:
+                bvec = file
+            elif "bval" in file:
+                bval = file
+    for file in func_folder.iterdir():
+        file = str(file)
+        if "sbref.nii" in file:
+            sbref_file = file
+        elif "bold.nii" in file:
+            func_file = file
+    for file in anat_folder.iterdir():
+        file = str(file)
+        if "T1w.nii" in file:
+            anat_file = file
+    for file in fmap_folder.iterdir():
+        file = str(file)
+        if "PA_epi.nii" in file:
+            phasediff = file
+
+    return (
+        Path(anat_file),
+        Path(func_file),
+        Path(sbref_file),
+        Path(dwi_file),
+        Path(bvec),
+        Path(bval),
+        Path(phasediff),
+    )
 
 
 check_nifti_output()
@@ -124,11 +178,29 @@ def GenDatain(AP: Path, PA: Path, datain: Path):
     AP, PA = [AP.with_suffix(".json"), PA.with_suffix(".json")]
     total_readout: list = []
     for i, f in enumerate([AP, PA]):
-        with open(f, "r") as json_file:
-            data = json.load(json_file)
-        total_readout.append(data["BandwidthPerPixelPhaseEncode"])
+        echo_spacing, cur_total_readout, TE = Calculate_b0_params(f)
+        total_readout.append(cur_total_readout)
     with open(datain, "w+") as out_file:
         out_file.write(f"0 -1 0 {total_readout[0]}\n0 1 0 {total_readout[1]}")
+
+
+def Calculate_b0_params(json_file: Path):
+    """
+    Calculate effective echo spacing and total readout time from dwi's json.
+    For explanations, see https://lcni.uoregon.edu/kb-articles/kb-0003
+    Arguments:
+        json_file {Path} -- [Path to dwi's json file]
+
+    Returns:
+        effective_spacing [float] -- [1/(BandwidthPerPixelPhaseEncode * ReconMatrixPE)]
+        total_readout [float] -- [(ReconMatrixPE - 1) * effective_spacing]
+    """
+    with open(json_file, "r") as f:
+        data = json.load(f)
+        effective_spacing = data["EffectiveEchoSpacing"]
+        total_readout = data["TotalReadoutTime"]
+        TE = data["EchoTime"]
+    return effective_spacing, total_readout, TE
 
 
 def TopUp(merged: Path, datain: Path, fieldmap: Path):
@@ -151,3 +223,67 @@ def TopUp(merged: Path, datain: Path, fieldmap: Path):
     cmd = f"fslmaths {unwarped} -Tmean {fieldmap_mag}"
     os.system(cmd)
     return fieldmap_mag, fieldmap_rads
+
+
+class FeatDesign:
+    def __init__(
+        self,
+        out_dir: Path,
+        in_file: Path,
+        highres_brain: Path,
+        temp_design: Path,
+        out_design: Path,
+        fieldmap_rad: Path,
+        fieldmap_brain: Path,
+    ):
+        self.out_dir = out_dir
+        self.epi_file = in_file
+        self.highres = highres_brain
+        self.temp_design = temp_design
+        self.subj_design = out_design
+        self.fieldmap_rad = fieldmap_rad
+        self.fieldmap_brain = fieldmap_brain
+
+    def init_params(self):
+        epi_json = self.epi_file.with_suffix(".json")
+        effective_spacing, total_readout, TE = Calculate_b0_params(epi_json)
+        effective_spacing = effective_spacing * 1000
+        TE = TE * 1000
+        img = nib.load(self.epi_file)
+        IMG_size = str(np.sum(img.get_fdata() > 0))
+        TR = str(img.header.get_zooms()[3])
+        ntime = str(img.shape[-1])
+
+        return TR, IMG_size, ntime, TE, effective_spacing
+
+    def GenReplacements(self, IMG_size, TR, ntime, TE, effective_spacing):
+        replacements = {
+            "n_frames": ntime,
+            "outdir": self.out_dir,
+            "cur_TR": TR,
+            "epi_file": self.epi_file,
+            "highres_brain": self.highres,
+            "n_voxels": IMG_size,
+            "cur_TE": TE,
+            "fieldmap_rad": self.fieldmap_rad,
+            "fieldmap_mag_brain": self.fieldmap_brain,
+            "effective_spacing": effective_spacing,
+        }
+        return replacements
+
+    def GenFsf(self, replacements, subj_fsf):
+        with open(self.temp_design) as infile:
+            with open(self.subj_design, "w") as out_file:
+                for line in infile:
+                    for src, target in replacements.items():
+                        line = line.replace(src, str(target))
+                    out_file.write(line)
+        print(f"Created fsf at {self.subj_design}")
+
+    def run(self):
+        TR, n_voxels, n_frames, TE, effective_spacing = self.init_params()
+        replacements = self.GenReplacements(
+            n_voxels, TR, n_frames, TE, effective_spacing
+        )
+        self.GenFsf(replacements, self.subj_design)
+        return self.subj_design

@@ -7,10 +7,9 @@ import time
 import tkinter as tk
 from bids_validator import BIDSValidator
 from pathlib import Path
-from codes import (
-    Mrtrix3_methods as MRT_Methods,
-    prep_functions as Methods,
-)
+import Mrtrix3_methods as MRT_Methods
+import prep_functions as Methods
+
 from atlases.atlases import Atlases
 from templates.templates import Templates
 from tkinter import filedialog
@@ -135,7 +134,7 @@ class BidsPrep:
         in_file = Path(in_file)
         return not in_file.is_file()
 
-    def GenFieldMap(self, subj: str, AP: Path, PA: Path, outdir: Path):
+    def GenFieldMap(self, subj: str, AP: Path, PA: Path):
         """
         Generate Field Maps using dwi's AP and phasediff's PA scans
         Arguments:
@@ -143,19 +142,30 @@ class BidsPrep:
             PA {Path} -- [path to PA phasediff file]
             outdir {Path} -- [path to output directory (outdir/sub-xx/fmap)]
         """
+        outdir = self.out_dir / subj / "fmap"
         merged = outdir / "merged_phasediff.nii"
         if not merged.exists():
+            print("generating dual-phase encoded image...")
             merger = Methods.MergePhases(AP, PA, merged)
             merger.run()
+        else:
+            print("Dual-phase encoded image already exists...")
         datain = outdir / "datain.txt"
         if not datain.exists():
+            print("Generating datain.txt with dual-phase data...")
             Methods.GenDatain(AP, PA, datain)
+        else:
+            print("datain.txt already exists...")
         fieldmap = outdir / "fieldmap.nii"
-        fieldmap_rads = fieldmap.with_name(fieldmap.stem + "_rad.nii")
+        fieldmap_rad = fieldmap.with_name(fieldmap.stem + "_rad.nii")
         fieldmap_mag = fieldmap.with_name(fieldmap.stem + "_magnitude.nii")
         if not fieldmap_mag.exists():
+            print("Using TopUp method to generate fieldmap images...")
             fieldmap_mag, fieldmap_rad = Methods.TopUp(merged, datain, fieldmap)
-        self.BrainExtract(subj, fieldmap_mag, "fmap")
+        else:
+            print("Fieldmap images already exists...")
+        fieldmap_brain = self.BrainExtract(subj, fieldmap_mag, "fmap")
+        return fieldmap_rad, fieldmap_brain
 
     def BrainExtract(self, subj: str, in_file: Path, seq: str = "anat"):
         """
@@ -217,31 +227,45 @@ class BidsPrep:
         return out_file
 
     ##########
-    def prep_feat(self, subj: str, epi_file: str, highres: str):
+    def prep_feat(
+        self,
+        subj: str,
+        epi_file: Path,
+        highres: Path,
+        fieldmap_mag_brain: Path,
+        fieldmap_rad: Path,
+    ):
         """
         Perform FSL's feat preprocessing
         Arguments:
             subj {str} -- ['sub-xx' in a BIDS compatible directory]
             epi_file {str} -- [Path to a 4D file use as input for FSL's feat.]
             highres {str} -- [Path to brain-extracted ('_brain') highres structural file]
-
+            fieldmap_rad {Path} -- [Path tp fieldmap file in radians]
+            fieldmap_mag_brain {Path} -- [Path to fieldmap magnitude brain extracted image]
         Returns:
             [str] -- [Path to .feat directory]
         """
         temp_design = self.design
-        if "dwi" in epi_file:
-            subj_design = f"{self.out_dir}/{subj}/scripts/dwi_design.fsf"
-            out_feat = f"{self.out_dir}/{subj}/dwi/dwi.feat"
-        elif "func" in epi_file:
-            subj_design = f"{self.out_dir}/{subj}/scripts/func_design.fsf"
-            out_feat = f"{self.out_dir}/{subj}/func/func.feat"
-        GenFsf = Methods.feat_design(
-            out_feat, epi_file, highres, temp_design, subj_design
+        if "dwi" in str(epi_file):
+            subj_design = self.out_dir / subj / "scripts" / "dwi_design.fsf"
+            out_feat = self.out_dir / subj / "dwi" / "dwi.feat"
+        elif "func" in str(epi_file):
+            subj_design = self.out_dir / subj / "scripts" / "func_design.fsf"
+            out_feat = self.out_dir / subj / "func" / "func.feat"
+        GenFsf = Methods.FeatDesign(
+            out_feat,
+            epi_file,
+            highres,
+            temp_design,
+            subj_design,
+            fieldmap_rad,
+            fieldmap_mag_brain,
         )
         fsf = GenFsf.run()
         if not os.path.isdir(out_feat):
             print(f"Running FEAT for {subj}")
-            print(f"input: {epi_file.split(os.sep)[-1]}")
+            print(f"input: {epi_file.name}")
             os.system(f"feat {fsf}")
         return out_feat
 
@@ -328,31 +352,36 @@ class BidsPrep:
                 bval,
                 phasediff,
             ) = Methods.load_initial_files(self.mother_dir, subj)
+            fieldmap_rad, fieldmap_mag = self.GenFieldMap(subj, dwi, phasediff)
             highres_brain = self.BrainExtract(subj, anat)
             if func:
                 # motion_corrected = self.MotionCorrect(subj, func, "func")
-                feat = self.prep_feat(subj, func, highres_brain)
+                feat = self.prep_feat(
+                    subj, func, highres_brain, fieldmap_mag, fieldmap_rad
+                )
                 (
                     epi_file,
                     highres,
                     highres2func,
                     standard2highres,
                 ) = self.load_transforms(feat)
-                self.generate_atlas(
-                    subj, epi_file, highres, highres2func, standard2highres
-                )
+                # self.generate_atlas(
+                #     subj, epi_file, highres, highres2func, standard2highres
+                # )
             if dwi:
                 # motion_corrected = self.MotionCorrect(subj, dwi, "dwi")
-                feat = self.prep_feat(subj, dwi, highres_brain)
+                feat = self.prep_feat(
+                    subj, dwi, highres_brain, fieldmap_mag, fieldmap_rad
+                )
                 (
                     epi_file,
                     highres,
                     highres2func,
                     standard2highres,
                 ) = self.load_transforms(feat)
-                self.generate_atlas(
-                    subj, epi_file, highres, highres2func, standard2highres
-                )
+                # self.generate_atlas(
+                #     subj, epi_file, highres, highres2func, standard2highres
+                # )
             # self.gen_subj_atlas(subj, highres_brain, dwi)
 
             elapsed = (time.time() - t) / 60
@@ -360,7 +389,7 @@ class BidsPrep:
 
 
 if __name__ == "__main__":
-    bids_dir = "/Users/dumbeldore/Desktop/bids_dataset"
+    bids_dir = Path("/Users/dumbeldore/Desktop/bids_dataset")
     t = BidsPrep(mother_dir=bids_dir, seq="func", atlas=ATLAS)
     t.run()
 

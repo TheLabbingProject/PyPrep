@@ -7,3 +7,7 @@
     4. n_voxels
     5. epi_file
     6. highres_brain
+    7. cur_TE
+    8. fieldmap_rad
+    9. fieldmap_mag_brain
+    10. effective_spacing
