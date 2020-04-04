@@ -109,7 +109,7 @@ set fmri(st_file) ""
 set fmri(bet_yn) 1
 
 # Spatial smoothing FWHM (mm)
-set fmri(smooth) 5
+set fmri(smooth) 3.0
 
 # Intensity normalization
 set fmri(norm_yn) 0
@@ -221,7 +221,7 @@ set fmri(reginitial_highres_yn) 0
 # 0   : No search
 # 90  : Normal search
 # 180 : Full search
-set fmri(reginitial_highres_search) 90
+set fmri(reginitial_highres_search) 180
 
 # Degrees of Freedom for registration to initial structural
 set fmri(reginitial_highres_dof) 3
@@ -233,7 +233,7 @@ set fmri(reghighres_yn) 1
 # 0   : No search
 # 90  : Normal search
 # 180 : Full search
-set fmri(reghighres_search) 90
+set fmri(reghighres_search) 180
 
 # Degrees of Freedom for registration to main structural
 set fmri(reghighres_dof) BBR

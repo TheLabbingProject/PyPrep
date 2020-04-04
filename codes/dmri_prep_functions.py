@@ -3,8 +3,64 @@ import nipype.interfaces.mrtrix3 as mrt
 import nipype.interfaces.fsl as fsl
 import nibabel as nib
 import os
-
+import pathlib
+from pathlib import Path
 from nilearn.image import index_img
+
+
+def GenIndex(epi_file: Path, index_file: Path):
+    """
+    Generates index.txt file, needed to run eddy-currents corrections.
+    Arguments:
+        epi_file {Path} -- [Path to dwi file]
+        index_file {Path} -- [Path to output index.txt file]
+    """
+    img = nib.load(epi_file)
+    n_frames = img.shape[3]
+    with open(index_file, "w") as in_file:
+        for i in range(n_frames):
+            in_file.write("1\n")
+        in_file.close()
+
+
+def eddy_correct(
+    in_file: Path,
+    mask: Path,
+    index: Path,
+    acq: Path,
+    bvec: Path,
+    bval: Path,
+    fieldcoef: Path,
+    movpar: Path,
+    out_base: Path,
+):
+    """
+    Generating FSL's eddy-currents correction tool, eddy, with specific inputs.
+    Arguments:
+        in_file {Path} -- [Path to dwi file]
+        mask {Path} -- [Path to brain mask file]
+        index {Path} -- [Path to index.txt file]
+        acq {Path} -- [Path to datain.txt file]
+        bvec {Path} -- [Path to bvec file (extracted automatically when converting the dicom file)]
+        bval {Path} -- [Path to bval file (extracted automatically when converting the dicom file)]
+        fieldcoef {Path} -- [Path to field coeffient as extracted after topup procedure]
+        movpar {Path} -- [Path to moving parameters as extracted after topup procedure]
+        out_base {Path} -- [Path to eddy's output base name]
+
+    Returns:
+        eddy [type] -- [nipype's FSL eddy's interface, generated with specific inputs]
+    """
+    eddy = fsl.Eddy()
+    eddy.inputs.in_file = in_file
+    eddy.inputs.in_mask = mask
+    eddy.inputs.in_index = index
+    eddy.inputs.in_acqp = acq
+    eddy.inputs.in_bvec = bvec
+    eddy.inputs.in_bval = bval
+    eddy.inputs.in_topup_fieldcoef = fieldcoef
+    eddy.inputs.in_topup_movpar = movpar
+    eddy.inputs.out_base = str(out_base)
+    return eddy
 
 
 # Initiate Mrtrix folder

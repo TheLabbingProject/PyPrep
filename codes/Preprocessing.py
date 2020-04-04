@@ -7,8 +7,8 @@ import time
 import tkinter as tk
 from bids_validator import BIDSValidator
 from pathlib import Path
-import Mrtrix3_methods as MRT_Methods
-import prep_functions as Methods
+import dmri_prep_functions as dmri_methods
+import fmri_prep_functions as fmri_methods
 
 from atlases.atlases import Atlases
 from templates.templates import Templates
@@ -120,7 +120,7 @@ class BidsPrep:
             if not os.path.isdir(new_d):
                 os.makedirs(new_d)
         print(f"Sorted output directory to resemble input, BIDS compatible one:")
-        Methods.list_files(str(self.out_dir))
+        fmri_methods.list_files(str(self.out_dir))
 
     def check_file(self, in_file: Path):
         """
@@ -146,26 +146,32 @@ class BidsPrep:
         merged = outdir / "merged_phasediff.nii"
         if not merged.exists():
             print("generating dual-phase encoded image...")
-            merger = Methods.MergePhases(AP, PA, merged)
+            merger = fmri_methods.MergePhases(AP, PA, merged)
             merger.run()
         else:
             print("Dual-phase encoded image already exists...")
         datain = outdir / "datain.txt"
         if not datain.exists():
             print("Generating datain.txt with dual-phase data...")
-            Methods.GenDatain(AP, PA, datain)
+            fmri_methods.GenDatain(AP, PA, datain)
         else:
             print("datain.txt already exists...")
+        index_file = outdir / "index.txt"
+        if not index_file.exists():
+            print("Generating index.txt file, for later eddy-currents correction...")
+            dmri_methods.GenIndex(AP, index_file)
+        else:
+            print("index.txt file already exists...")
         fieldmap = outdir / "fieldmap.nii"
         fieldmap_rad = fieldmap.with_name(fieldmap.stem + "_rad.nii")
         fieldmap_mag = fieldmap.with_name(fieldmap.stem + "_magnitude.nii")
         if not fieldmap_mag.exists():
             print("Using TopUp method to generate fieldmap images...")
-            fieldmap_mag, fieldmap_rad = Methods.TopUp(merged, datain, fieldmap)
+            fieldmap_mag, fieldmap_rad = fmri_methods.TopUp(merged, datain, fieldmap)
         else:
             print("Fieldmap images already exists...")
         fieldmap_brain = self.BrainExtract(subj, fieldmap_mag, "fmap")
-        return fieldmap_rad, fieldmap_brain
+        return fieldmap_rad, fieldmap_brain, index_file, datain
 
     def BrainExtract(self, subj: str, in_file: Path, seq: str = "anat"):
         """
@@ -187,7 +193,7 @@ class BidsPrep:
             print("Performing brain extractoin using FSL`s bet")
             print(f"Input file: {in_file}")
             print(f"Output file: {out_file}")
-            bet = Methods.BetBrainExtract(in_file, out_file)
+            bet = fmri_methods.BetBrainExtract(in_file, out_file)
             bet.run()
         else:
             print("Brain extraction already done.")
@@ -212,7 +218,7 @@ class BidsPrep:
         is_4d = img.ndim > 3
         if is_4d:
             if self.check_file(out_file):
-                mot_cor = Methods.MotionCorrect(in_file=in_file, out_file=out_file)
+                mot_cor = fmri_methods.MotionCorrect(in_file=in_file, out_file=out_file)
                 print("Performing motion correction using FSL`s MCFLIRT")
                 print(f"Input file: {in_file}")
                 print(f"Output file: {out_file}")
@@ -226,7 +232,6 @@ class BidsPrep:
             )
         return out_file
 
-    ##########
     def prep_feat(
         self,
         subj: str,
@@ -253,7 +258,7 @@ class BidsPrep:
         elif "func" in str(epi_file):
             subj_design = self.out_dir / subj / "scripts" / "func_design.fsf"
             out_feat = self.out_dir / subj / "func" / "func.feat"
-        GenFsf = Methods.FeatDesign(
+        GenFsf = fmri_methods.FeatDesign(
             out_feat,
             epi_file,
             highres,
@@ -282,7 +287,7 @@ class BidsPrep:
             out_dir = f"{self.out_dir}/{subj}/anat"
         else:
             out_dir = f"{self.out_dir}/{subj}/atlases"
-        flt = Methods.FLIRT(in_file, ref, out_dir, proc)
+        flt = fmri_methods.FLIRT(in_file, ref, out_dir, proc)
         flt.run()
 
     def gen_subj_atlas(self, subj: str, highres: str, epi: str):
@@ -325,12 +330,71 @@ class BidsPrep:
 
         out_dir = str(Path(self.out_dir) / subj / "atlases")
         atlas_in_highres = str(Path(out_dir) / "atlas2subj_highres_Linear.nii")
-        flt1 = Methods.FLIRT(self.highres_atlas, highres, out_dir, standard2highres)
+        flt1 = fmri_methods.FLIRT(
+            self.highres_atlas, highres, out_dir, standard2highres
+        )
         flt1.run()
 
         atlas_in_epi = str(Path(out_dir) / "atlas2subj_epi_Linear.nii")
-        flt2 = Methods.lin_atlas2subj(atlas_in_highres, epi_file, out_dir, highres2func)
+        flt2 = fmri_methods.lin_atlas2subj(
+            atlas_in_highres, epi_file, out_dir, highres2func
+        )
         flt.run()
+
+    def params_for_eddy(self, subj):
+        """
+        Get paths for eddy-required files
+        Arguments:
+            subj {[type]} -- ['sub-xx' in a BIDS compatible directory]
+        """
+        fmap_dir: Path = self.out_dir / subj / "fmap"
+        for f in fmap_dir.iterdir():
+            f = str(f)
+            if "index.txt" in f:
+                index = Path(f)
+            elif "fieldcoef.nii" in f:
+                fieldcoef = Path(f)
+            elif "movpar.txt" in f:
+                movpar = Path(f)
+            elif "mask.nii" in f:
+                mask = Path(f)
+        return fieldcoef, movpar, mask
+
+    def run_eddy(
+        self,
+        subj: str,
+        epi_file: Path,
+        mask: Path,
+        index: Path,
+        acq: Path,
+        bvec: Path,
+        bval: Path,
+        fieldcoef: Path,
+        movpar: Path,
+    ):
+        """
+        Generating FSL's eddy-currents correction tool, eddy, with specific inputs.
+        Arguments:
+            subj {str} -- ['sub-xx' in a BIDS compatible directory]
+            epi_file {Path} -- [Path to dwi file]
+            mask {Path} -- [Path to brain mask file]
+            index {Path} -- [Path to index.txt file]
+            acq {Path} -- [Path to datain.txt file]
+            bvec {Path} -- [Path to bvec file (extracted automatically when converting the dicom file)]
+            bval {Path} -- [Path to bval file (extracted automatically when converting the dicom file)]
+            fieldcoef {Path} -- [Path to field coeffient as extracted after topup procedure]
+            movpar {Path} -- [Path to moving parameters as extracted after topup procedure]
+
+        Returns:
+            eddy [type] -- [nipype's FSL eddy's interface, generated with specific inputs]
+        """
+        out_base = self.out_dir / subj / "dwi" / "eddy_corrected"
+        eddy = dmri_methods.eddy_correct(
+            epi_file, mask, index, acq, bvec, bval, fieldcoef, movpar, out_base
+        )
+        print("Running FSL's eddy-current correction tool:")
+        print(eddy.cmdline)
+        eddy.run()
 
     def run(self):
         """
@@ -351,8 +415,11 @@ class BidsPrep:
                 bvec,
                 bval,
                 phasediff,
-            ) = Methods.load_initial_files(self.mother_dir, subj)
-            fieldmap_rad, fieldmap_mag = self.GenFieldMap(subj, dwi, phasediff)
+            ) = fmri_methods.load_initial_files(self.mother_dir, subj)
+            fieldmap_rad, fieldmap_mag, index, acq = self.GenFieldMap(
+                subj, dwi, phasediff
+            )
+            fieldcoef, movpar, mask = self.params_for_eddy(subj)
             highres_brain = self.BrainExtract(subj, anat)
             if func:
                 # motion_corrected = self.MotionCorrect(subj, func, "func")
@@ -370,15 +437,18 @@ class BidsPrep:
                 # )
             if dwi:
                 # motion_corrected = self.MotionCorrect(subj, dwi, "dwi")
-                feat = self.prep_feat(
-                    subj, dwi, highres_brain, fieldmap_mag, fieldmap_rad
+                self.run_eddy(
+                    subj, dwi, mask, index, acq, bvec, bval, fieldcoef, movpar
                 )
-                (
-                    epi_file,
-                    highres,
-                    highres2func,
-                    standard2highres,
-                ) = self.load_transforms(feat)
+                # feat = self.prep_feat(
+                #     subj, dwi, highres_brain, fieldmap_mag, fieldmap_rad
+                # )
+                # (
+                #     epi_file,
+                #     highres,
+                #     highres2func,
+                #     standard2highres,
+                # ) = self.load_transforms(feat)
                 # self.generate_atlas(
                 #     subj, epi_file, highres, highres2func, standard2highres
                 # )
@@ -390,7 +460,7 @@ class BidsPrep:
 
 if __name__ == "__main__":
     bids_dir = Path("/Users/dumbeldore/Desktop/bids_dataset")
-    t = BidsPrep(mother_dir=bids_dir, seq="func", atlas=ATLAS)
+    t = BidsPrep(mother_dir=bids_dir, subj="sub-01", seq="func", atlas=ATLAS)
     t.run()
 
 # to run ICA-AROMA:
