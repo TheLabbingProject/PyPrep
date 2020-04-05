@@ -15,14 +15,15 @@ def check_nifti_output():
     fsldir = Path(os.getenv("FSLDIR"))
     fslconf_dir = Path(Path.home() / ".fslconf")
     fslconf_file = fslconf_dir / "fsl.sh"
-    if cur_output != "NIFTI":
+    if cur_output != "NIFTI_GZ":
         if not fslconf_dir.exists():
             fslconf_dir.mkdir()
         with fslconf_file.open(mode="w+") as conf_file:
-            conf_file.write("FSLOUTTYPE=NIFTI\n")
+            conf_file.write("FSLOUTTYPE=NIFTI_GZ\n")
             conf_file.write("export FSLOUTTYPE")
+            os.system("export FSLOUTTYPE=NIFTI_GZ")
         print(
-            f"""FSLOUTTYPE is now set to NIFTI (.nii).
+            f"""FSLOUTTYPE is now set to NIFTI_GZ (.nii.gz).
         If you wish to change it in the future:
             1. Open the file located at: {fslconf_file}
             2. Change the FSLOUTTYPE variable to the desired output format."""
@@ -48,37 +49,37 @@ def load_initial_files(mother_dir: Path, sub: str):
     func_folder = folder_name / "func"
     anat_file = func_file = sbref_file = dwi_file = bvec = bval = phasediff = None
     for file in dwi_folder.iterdir():
-        file = str(file)
-        if "dwi" in file:
-            if "dwi.nii" in file:
+        # file = str(file)
+        if "dwi" in str(file):
+            if "dwi.nii" in str(file):
                 dwi_file = file
-            elif "bvec" in file:
+            elif "bvec" in str(file):
                 bvec = file
-            elif "bval" in file:
+            elif "bval" in str(file):
                 bval = file
     for file in func_folder.iterdir():
-        file = str(file)
-        if "sbref.nii" in file:
+        # file = str(file)
+        if "sbref.nii" in str(file):
             sbref_file = file
-        elif "bold.nii" in file:
+        elif "bold.nii" in str(file):
             func_file = file
     for file in anat_folder.iterdir():
-        file = str(file)
-        if "T1w.nii" in file:
+        # file = str(file)
+        if "T1w.nii" in str(file):
             anat_file = file
     for file in fmap_folder.iterdir():
-        file = str(file)
-        if "PA_epi.nii" in file:
+        # file = str(file)
+        if "PA_epi.nii" in str(file):
             phasediff = file
 
     return (
-        Path(anat_file),
-        Path(func_file),
-        Path(sbref_file),
-        Path(dwi_file),
-        Path(bvec),
-        Path(bval),
-        Path(phasediff),
+        anat_file,
+        func_file,
+        sbref_file,
+        dwi_file,
+        bvec,
+        bval,
+        phasediff,
     )
 
 
@@ -181,7 +182,7 @@ def GenDatain(AP: Path, PA: Path, datain: Path):
         echo_spacing, cur_total_readout, TE = Calculate_b0_params(f)
         total_readout.append(cur_total_readout)
     with open(datain, "w+") as out_file:
-        out_file.write(f"0 -1 0 {total_readout[0]}\n0 1 0 {total_readout[1]}")
+        out_file.write(f"0 1 0 {total_readout[0]}\n0 -1 0 {total_readout[1]}")
 
 
 def Calculate_b0_params(json_file: Path):

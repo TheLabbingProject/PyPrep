@@ -790,11 +790,14 @@ class transform_atlas2highres:
             fnt.run()
         return fnt.inputs.warped_file
 
-def FNIRT(in_file:str, ref: str, out_file:str, aff:str =None):
+
+def FNIRT(in_file: str, ref: str, out_file: str, aff: str = None):
     fnt = fsl.FNIRT()
     fnt.inputs.in_file = in_file
     fnt.inputs.ref_file = ref
-def FLIRT(in_file: str, ref: str, out_file: str, aff:str =None):
+
+
+def FLIRT(in_file: str, ref: str, out_file: str, aff: str = None):
     flt = fsl.FLIRT()
     flt.inputs.in_file = in_file
     flt.inputs.reference = ref

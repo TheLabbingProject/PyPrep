@@ -7,11 +7,11 @@ import time
 import tkinter as tk
 from bids_validator import BIDSValidator
 from pathlib import Path
-import dmri_prep_functions as dmri_methods
-import fmri_prep_functions as fmri_methods
+from PyPrep.codes import dmri_prep_functions as dmri_methods
+from PyPrep.codes import fmri_prep_functions as fmri_methods
 
-from atlases.atlases import Atlases
-from templates.templates import Templates
+from PyPrep.atlases.atlases import Atlases
+from PyPrep.templates.templates import Templates
 from tkinter import filedialog
 
 MOTHER_DIR = Path("/Users/dumbeldore/Desktop/bids_dataset")
@@ -134,7 +134,7 @@ class BidsPrep:
         in_file = Path(in_file)
         return not in_file.is_file()
 
-    def GenFieldMap(self, subj: str, AP: Path, PA: Path):
+    def generate_field_map(self, subj: str, AP: Path, PA: Path):
         """
         Generate Field Maps using dwi's AP and phasediff's PA scans
         Arguments:
@@ -252,12 +252,8 @@ class BidsPrep:
             [str] -- [Path to .feat directory]
         """
         temp_design = self.design
-        if "dwi" in str(epi_file):
-            subj_design = self.out_dir / subj / "scripts" / "dwi_design.fsf"
-            out_feat = self.out_dir / subj / "dwi" / "dwi.feat"
-        elif "func" in str(epi_file):
-            subj_design = self.out_dir / subj / "scripts" / "func_design.fsf"
-            out_feat = self.out_dir / subj / "func" / "func.feat"
+        subj_design = self.out_dir / subj / "scripts" / "func_design.fsf"
+        out_feat = self.out_dir / subj / "func" / "func.feat"
         GenFsf = fmri_methods.FeatDesign(
             out_feat,
             epi_file,
@@ -305,7 +301,7 @@ class BidsPrep:
         ):
             self.coregister(subj, in_file, ref, proc)
         print("Generated subject-space atlas:\n")
-        list_files.list_files(f"{self.out_dir}/{subj}")
+        fmri_methods.list_files(f"{self.out_dir}/{subj}")
 
     def load_transforms(self, feat: str):
         reg_dir = Path(f"{feat}/reg")
@@ -339,7 +335,7 @@ class BidsPrep:
         flt2 = fmri_methods.lin_atlas2subj(
             atlas_in_highres, epi_file, out_dir, highres2func
         )
-        flt.run()
+        flt2.run()
 
     def params_for_eddy(self, subj):
         """
@@ -416,7 +412,7 @@ class BidsPrep:
                 bval,
                 phasediff,
             ) = fmri_methods.load_initial_files(self.mother_dir, subj)
-            fieldmap_rad, fieldmap_mag, index, acq = self.GenFieldMap(
+            fieldmap_rad, fieldmap_mag, index, acq = self.generate_field_map(
                 subj, dwi, phasediff
             )
             fieldcoef, movpar, mask = self.params_for_eddy(subj)
