@@ -8,6 +8,8 @@ import subprocess
 import json
 import numpy as np
 
+FSLOUTTYPE = ".nii.gz"
+
 
 def check_nifti_output():
     info = fsl.Info
@@ -29,7 +31,7 @@ def check_nifti_output():
             2. Change the FSLOUTTYPE variable to the desired output format."""
         )
     else:
-        print("""FSLOUTTYPE is set to NIFTI (.nii)""")
+        print("""FSLOUTTYPE is set to NIFTI_GZ (.nii.gz)""")
 
 
 def load_initial_files(mother_dir: Path, sub: str):
@@ -120,11 +122,11 @@ def BetBrainExtract(in_file: Path, out_file: Path = None):
         f_name = Path(
             in_file.parent / Path(in_file.stem).stem
         )  # clear .nii.gz and .nii
-        out_file = Path(f"{f_name}_brain.nii")
-        mask_file = Path(f"{f_name}_brain_mask.nii")
+        out_file = Path(f"{f_name}_brain{FSLOUTTYPE}")
+        mask_file = Path(f"{f_name}_brain_mask{FSLOUTTYPE}")
     else:
         f_name = Path(out_file.parent / Path(out_file.stem).stem)
-        mask_file = Path(f"{f_name}_mask.nii")
+        mask_file = Path(f"{f_name}_mask{FSLOUTTYPE}")
     # initiate fsl
     bet = fsl.BET()
     bet.inputs.in_file = in_file
@@ -159,7 +161,7 @@ def MergePhases(in_file: Path, phasediff: Path, merged: Path):
         phasediff {Path} -- [path to phase-different, PA oriented file]
     """
     AP_b0 = index_img(str(in_file), 0)
-    AP_file = merged.parent / "AP_b0.nii"
+    AP_file = merged.parent / f"AP_b0{FSLOUTTYPE}"
     nib.save(AP_b0, str(AP_file))
     merger = fsl.Merge()
     merger.inputs.in_files = [AP_file, phasediff]
@@ -176,13 +178,16 @@ def GenDatain(AP: Path, PA: Path, datain: Path):
         PA {Path} -- [path to PA encoded file]
         datain {Path} -- [path to output datain.txt file]
     """
-    AP, PA = [AP.with_suffix(".json"), PA.with_suffix(".json")]
+    AP, PA = [
+        Path(AP.parent / f"{Path(AP.stem).stem}.json"),
+        Path(PA.parent / f"{Path(PA.stem).stem}.json"),
+    ]
     total_readout: list = []
     for i, f in enumerate([AP, PA]):
         echo_spacing, cur_total_readout, TE = Calculate_b0_params(f)
         total_readout.append(cur_total_readout)
     with open(datain, "w+") as out_file:
-        out_file.write(f"0 1 0 {total_readout[0]}\n0 -1 0 {total_readout[1]}")
+        out_file.write(f"0 -1 0 {total_readout[0]}\n0 1 0 {total_readout[1]}")
 
 
 def Calculate_b0_params(json_file: Path):
@@ -212,15 +217,15 @@ def TopUp(merged: Path, datain: Path, fieldmap: Path):
         datain {Path} -- [phase encoding .txt file]
         fieldmap {Path} -- [output fieldmap file]
     """
-    unwarped = fieldmap.with_name("unwarped.nii")
+    unwarped = fieldmap.with_name(f"unwarped{FSLOUTTYPE}")
     cmd = (
         f"topup --imain={merged} --datain={datain} --fout={fieldmap} --iout={unwarped}"
     )
     os.system(cmd)
-    fieldmap_rads = fieldmap.with_name(fieldmap.stem + "_rad.nii")
+    fieldmap_rads = fieldmap.with_name(fieldmap.stem + f"_rad{FSLOUTTYPE}")
     cmd = f"fslmaths {fieldmap} -mul 6.28 {fieldmap_rads}"
     os.system(cmd)
-    fieldmap_mag = fieldmap.with_name(fieldmap.stem + "_magnitude.nii")
+    fieldmap_mag = fieldmap.with_name(fieldmap.stem + f"_magnitude{FSLOUTTYPE}")
     cmd = f"fslmaths {unwarped} -Tmean {fieldmap_mag}"
     os.system(cmd)
     return fieldmap_mag, fieldmap_rads
@@ -246,7 +251,7 @@ class FeatDesign:
         self.fieldmap_brain = fieldmap_brain
 
     def init_params(self):
-        epi_json = self.epi_file.with_suffix(".json")
+        epi_json = Path(f"{self.epi_file.parent}/{Path(self.epi_file.stem).stem}.json")
         effective_spacing, total_readout, TE = Calculate_b0_params(epi_json)
         effective_spacing = effective_spacing * 1000
         TE = TE * 1000

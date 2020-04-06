@@ -134,49 +134,52 @@ def convert_to_mif(in_file, out_file, bvec=None, bval=None):
     return out_file
 
 
-def Denoise(in_file, in_mask, out_file):
+def Denoise(in_file: Path, in_mask: Path, out_file: Path):
     denoise = mrt.DWIDenoise()
     denoise.inputs.in_file = in_file
-    denoise.inputs.noise = in_file.replace(".mif", "_noise.mif")
+    denoise.inputs.noise = in_file.with_name(in_file.stem + "_noise.mif")
     denoise.inputs.mask = in_mask
     denoise.inputs.out_file = out_file
     print(denoise.cmdline)
-    denoise.run()
-    return out_file
+    return denoise
 
 
-def Unring(in_file: str, out_file: str):
+def Unring(in_file: Path, out_file: Path):
     unring = mrt.MRDeGibbs()
     unring.inputs.in_file = in_file
     unring.inputs.out_file = out_file
     print(unring.cmdline)
-    unring.run()
+    return unring
 
 
-def DWI_prep(degibbs: str, PA: str, out_file: str, data_type: str = "dwi", func=None):
-    eddy_dir = f"{os.path.dirname(degibbs)}/eddyqc"
-    if not os.path.isdir(eddy_dir):
+def DWI_prep(
+    degibbs: Path, PA: Path, out_file: Path, data_type: str = "dwi", func=None
+):
+    eddy_dir = Path(degibbs.parent / "eddyqc")
+    if not eddy_dir.is_dir():
         print("Creating directory for eddy current correction parameters...")
     ### extract first AP volume
-
-    mrconvert = mrt.MRConvert()
-    mrconvert.inputs.in_file = degibbs
-    mrconvert.inputs.out_file = f"{os.path.dirname(degibbs)}/AP_b0.mif"
-    mrconvert.inputs.coord = [3, 0]
-    print(mrconvert.cmdline)
-    mrconvert.run()
+    AP_b0 = Path(degibbs.parent / "AP_b0.mif")
+    if not AP_b0.is_file():
+        mrconvert = mrt.MRConvert()
+        mrconvert.inputs.in_file = degibbs
+        mrconvert.inputs.out_file = AP_b0
+        mrconvert.inputs.coord = [3, 0]
+        print(mrconvert.cmdline)
+        mrconvert.run()
     ### concatenate AP and PA
-    cmd = f"mrcat {mrconvert.inputs.out_file} {PA} {os.path.dirname(degibbs)}/b0s.mif -axis 3"
-    os.system(cmd)
+    dual_phased = Path(degibbs.parent / "b0s.mif")
+    if not dual_phased.is_file():
+        cmd = (
+            f"mrcat {AP_b0.absolute()} {PA.absolute()} {dual_phased.absolute()} -axis 3"
+        )
+        os.system(cmd)
     ### initiate dwipreproc (eddy)
-    in_file = func
-
     args = "-rpe_pair"
     eddyqc_text = "eddyqc/"
-    cmd = f"dwipreproc {in_file} {out_file} -pe_dir AP {args} -se_epi {os.path.dirname(degibbs)}/b0s.mif -eddyqc_text {os.path.dirname(degibbs)}/{eddyqc_text}"
+    cmd = f"dwipreproc {degibbs.absolute()} {out_file.absolute()} -pe_dir AP {args} -se_epi {dual_phased.absolute()} -eddyqc_text {degibbs.parent}/{eddyqc_text}"
     print(cmd)
-    os.system(cmd)
-    return out_file
+    return cmd
 
 
 def bias_correct(in_file: str, out_file: str):
