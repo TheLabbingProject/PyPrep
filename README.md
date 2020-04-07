@@ -1,7 +1,9 @@
 # PyPrep
 ## Yaniv Assaf's lab automated preprocessing project.
+![](templates/FlowChart-Pro.png)
 ### Prepocessing pipeline:
-```
+Diffusion (DWI) preprocessing procedure:
+
 1. Generate fieldmap files for eddy current correction:
     A. Merge both phase-encoded images into one. (FSL's Merge)
     B. Create acuisition parameters file, relying on the dual-phase encoded image.
@@ -11,7 +13,7 @@
 2. Generate brain-extracted structural image and mask (FSL's BET)
 3. For functional images, run FSL's FEAT using the functional, brain-extracted structural,brain extracted fieldmap magnitude and fieldmap (in radians) images.
 4. For diffusion images, apply eddy-currents correction using the DWI, brain mask, index file, acuisition parameters file, bvec, bval, and field coefficients and movpar files from TopUp procedure.
-```
+
 
 ### Output:
 * derivatives/
