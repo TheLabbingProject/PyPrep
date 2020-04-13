@@ -9,7 +9,6 @@ from bids_validator import BIDSValidator
 from pathlib import Path
 from PyPrep.code import dmri_prep_functions as dmri_methods
 from PyPrep.code import fmri_prep_functions as fmri_methods
-
 from PyPrep.atlases.atlases import Atlases
 from PyPrep.templates.templates import Templates
 from tkinter import filedialog
@@ -24,10 +23,8 @@ class BidsPrep:
     def __init__(
         self,
         mother_dir: Path,
-        seq: str,
         subj: str = None,
         out_dir: Path = None,
-        atlas: Path = ATLAS,
         design: Path = DESIGN,
         skip_bids: bool = False,
     ):
@@ -35,15 +32,12 @@ class BidsPrep:
         Initiate the BIDS preprocessing class with either a specific subject or None = all subjects (default)
         Arguments:
             mother_dir {Path} -- [Path to a BIDS compliant directory (should contain "mother_dir/sub-xx")]
-            seq (str) -- ["func","dwi","anat". Specify the modality of preprocessing you would like to produce.]
         Keyword Arguments:
             subj (str) -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
-            atlas (Path) -- [path to atlas` directory. should contain "Highres" and "Labels" files.] (default: '/atlases/megaatlas')
             design (Path) -- [Path to FEAT's design template.] (default: {'/templates/design.fsf'})
         """
         self.mother_dir = Path(mother_dir)
         self.subjects = list()
-        self.seq = seq
         self.design = Path(design)
         if subj:
             self.subjects.append(subj)
@@ -55,36 +49,11 @@ class BidsPrep:
         if not out_dir:
             out_dir = Path(self.mother_dir.parent / "derivatives")
         self.out_dir = out_dir
-        self.atlas = Path(atlas)
+        #self.atlas = Path(atlas)
         self.subjects.sort()
-        if not atlas:
-            self.highres_atlas, self.labels_atlas = self.get_atlas()
-        else:
-            for f in atlas.iterdir():
-                if "highres.nii" in str(f):
-                    self.highres_atlas = f
-                elif "Labels.nii" in str(f):
-                    self.labels_atlas = f
+
         self.skip_bids = skip_bids
 
-    def get_atlas(self):
-        """
-        GUI-based request from user to guide to atlas directory (megaatlas)
-        """
-        if not self.atlas:
-            root = tk.Tk()
-            root.withdraw()
-            atlas = Path(
-                filedialog.askdirectory(
-                    title="Please choose the folder containing your megaatlas files."
-                )
-            )
-        for f in atlas.iterdir():
-            if "highres.nii" in str(f):
-                highres_atlas = f
-            elif "Labels.nii" in str(f):
-                labels_atlas = f
-        return highres_atlas, labels_atlas
 
     def check_bids(self, mother_dir=None):
         if not mother_dir:
@@ -183,7 +152,7 @@ class BidsPrep:
     def BrainExtract(self, subj: str, in_file: Path, seq: str = "anat"):
         """
         Perform brain extraction using FSL's bet.
-        *** Need improvement - maybe use cat12
+        *** Needs improvement - maybe use cat12
         Arguments:
             subj {str} -- ['sub-xx' in a BIDS compatible directory]
             in_file {Path} -- [Path to file to perform brain extraction on.]
@@ -220,11 +189,11 @@ class BidsPrep:
 
         f_name = Path(in_file).name
         new_f = Path(Path(f_name).stem).stem + f"_MotionCorrected{FSLOUTTYPE}"
-        out_file = self.out_dir / subj / seq / new_f
+        out_file = Path(self.out_dir / subj / seq / new_f)
         img = nib.load(in_file)
         is_4d = img.ndim > 3
         if is_4d:
-            if self.check_file(out_file):
+            if not out_file.is_file():
                 mot_cor = fmri_methods.MotionCorrect(in_file=in_file, out_file=out_file)
                 print("Performing motion correction using FSL`s MCFLIRT")
                 print(f"Input file: {in_file}")
@@ -279,38 +248,9 @@ class BidsPrep:
             os.system(f"feat {fsf}")
         return out_feat
 
-    def coregister(self, subj: str, in_file: str, ref: str, proc: int):
-        """
-        Coregistration between 4D image to structural
-        Arguments:
-            subj {str} -- ['sub-xx' in a BIDS compatible directory]
-            in_file {str} -- [file to linear registrate to {ref}]
-            ref {str} -- [path to reference file]
-            proc {int} -- [0 for highres2lowres, 1 for atlasHighres2highres, 2 for atlasLabels2highres]
-        """
-        if proc == 0:
-            out_dir = f"{self.out_dir}/{subj}/anat"
-        else:
-            out_dir = f"{self.out_dir}/{subj}/atlases"
-        flt = fmri_methods.FLIRT(in_file, ref, out_dir, proc)
-        flt.run()
 
-    def gen_subj_atlas(self, subj: str, highres: str, epi: str):
-        """
-        Generate transformed atlas in subject's space.
-        Arguments:
-            subj {str} -- ['sub-xx' in a BIDS compatible directory]
-            highres {str} -- [Path to subject's structural, high-resolution image]
-            epi {str} -- [Path to subject's epi, low-resolution 4D image]
-        """
-        for in_file, ref, proc in zip(
-            [highres, self.highres_atlas, self.labels_atlas],
-            [epi, highres, highres],
-            [0, 1, 2],
-        ):
-            self.coregister(subj, in_file, ref, proc)
-        print("Generated subject-space atlas:\n")
-        fmri_methods.list_files(f"{self.out_dir}/{subj}")
+
+
 
     def load_transforms(self, feat: str):
         reg_dir = Path(f"{feat}/reg")
@@ -324,27 +264,6 @@ class BidsPrep:
         epi_file = str(Path(feat) / "mean_func.nii.gz")
         return epi_file, highres, highres2func_aff, standard2highres_aff
 
-    def generate_atlas(
-        self,
-        subj: str,
-        epi_file: str,
-        highres: str,
-        highres2func: str,
-        standard2highres: str,
-    ):
-
-        out_dir = str(Path(self.out_dir) / subj / "atlases")
-        atlas_in_highres = str(Path(out_dir) / "atlas2subj_highres_Linear.nii")
-        flt1 = fmri_methods.FLIRT(
-            self.highres_atlas, highres, out_dir, standard2highres
-        )
-        flt1.run()
-
-        atlas_in_epi = str(Path(out_dir) / "atlas2subj_epi_Linear.nii")
-        flt2 = fmri_methods.lin_atlas2subj(
-            atlas_in_highres, epi_file, out_dir, highres2func
-        )
-        flt2.run()
 
     def params_for_eddy(self, subj):
         """
@@ -499,6 +418,114 @@ class BidsPrep:
             os.system(cmd)
         return out_file
 
+    def convert_mif2nifti(self, subj: Path):
+        """
+        convert dwipreproc results back to .nii.gz
+        Arguments:
+            subj {Path} -- ['sub-xx' in a BIDS compatible directory]
+        """
+        mrtrix_dir = Path(self.out_dir / subj / "dwi" / "Mrtrix_prep")
+        anat = Path(self.out_dir / subj / "anat")
+        dwi = Path(self.out_dir / subj / "dwi")
+        for f in mrtrix_dir.iterdir():
+            if f.is_file():
+                f_name = f.name
+                if (
+                    "fieldmap" in f_name or "b0" in f_name or "PA" in f_name
+                ) and "mif" in f_name:
+                    f.unlink()
+                elif (
+                    ("T1" in f_name or "vis" in f_name or "5TT" in f_name)
+                    and "mif" in f_name
+                    and "dwi" not in f_name
+                ):
+                    out_file = anat / f"{f.stem}{FSLOUTTYPE}"
+                    if not out_file.is_file():
+                        print(f"Converting {f_name} to {out_file}.")
+                        dmri_methods.convert_to_mif(f, out_file)
+                elif ("dwi" in f_name or "AP" in f_name) and "mif" in f_name:
+                    if "preprocessed" in f_name:
+                        out_file = dwi / f"{subj}_acq-AP_{f.stem}{FSLOUTTYPE}"
+                    else:
+                        out_file = dwi / f"{f.stem}{FSLOUTTYPE}"
+                    if not out_file.is_file():
+                        print(f"Converting {f_name} to {out_file}.")
+                        dmri_methods.convert_to_mif(f, out_file)
+                if "mif" in f_name:
+                    f.unlink()
+
+    def bias_correct(self, preprocessed: Path):
+        """
+        Bias correction for the dwipreproc output
+        Arguments:
+            preprocessed {Path} -- [Path to dwipreproc result]
+        """
+        out_file = Path(preprocessed.parent / f"{preprocessed.stem}_biascorr.mif")
+        if not out_file.is_file():
+            out_file = dmri_methods.bias_correct(preprocessed, out_file)
+        return out_file
+
+    def reg_dwi_to_t1(self, dwi: Path, dwi_mask: Path, anat: Path, highres_mask: Path):
+        """
+        Perform registration from dwi to T1 images
+        Arguments:
+            dwi {Path} -- [Path to preprocessed dwi file]
+            dwi_mask {Path} -- [Path to dwi mask file]
+            highres {Path} -- [Path to highres (T1) file]
+            highres_mask {Path} -- [Path to highres (T1) mask file]
+        """
+        new_highres_mask = Path(anat.parent / f"{anat.stem}_brain_mask.mif")
+        if not new_highres_mask.is_file():
+            new_highres_mask = dmri_methods.convert_to_mif(
+                highres_mask, new_highres_mask
+            )
+        meanbzero = Path(dwi.parent / f"{dwi.stem}_meanbzero.mif")
+        dwi_pseudoT1 = Path(dwi.parent / f"{dwi.stem}_pseudoT1.mif")
+        T1_pseudobzero = Path(dwi.parent / f"{dwi.stem}_T1_pseudobzero.mif")
+        if not T1_pseudobzero.is_file():
+            meanbzero, dwi_pseudoT1, T1_pseudobzero = dmri_methods.DWI_to_T1_cont(
+                str(dwi), str(dwi_mask), str(anat), str(new_highres_mask)
+            )
+            meanbzero, dwi_pseudoT1, T1_pseudobzero = (
+                Path(meanbzero),
+                Path(dwi_pseudoT1),
+                Path(T1_pseudobzero),
+            )
+        t1_registered = Path(dwi.parent / "T1_registered.mif")
+        t1_mask_registered = Path(dwi.parent / "T1_mask_registered.mif")
+        if not t1_registered.is_file():
+            t1_registered, t1_mask_registered = dmri_methods.reg_dwi_T1(
+                str(dwi),
+                str(anat),
+                str(dwi_pseudoT1),
+                str(T1_pseudobzero),
+                str(meanbzero),
+                str(highres_mask),
+                str(dwi_mask),
+                True,
+            )
+            t1_registered, t1_mask_registered = (
+                Path(t1_registered),
+                Path(t1_mask_registered),
+            )
+        return t1_registered, t1_mask_registered
+
+    def prep_anat(self,subj:str,anat:Path):
+        """[summary]
+
+        Arguments:
+            subj {str} -- [description]
+            anat {Path} -- [description]
+        """
+        anat_dir = Path(self.out_dir / subj / "anat" / "prep")
+        cmd = f"fsl_anat -i {str(anat)} -o {str(anat_dir)}"
+        print("Performing structural preprocessing using fsl_anat:")
+        print(cmd)
+        os.system(cmd)
+        highres_brain = anat_dir / f"T1_biascorr_brain{FSLOUTTYPE}"
+        highres_mask = anat_dir / f"T1_biascorr_brain_mask{FSLOUTTYPE}"
+        return highres_brain,highres_mask
+
     def run(self):
         """
         Complete preprocessing procedure
@@ -527,7 +554,7 @@ class BidsPrep:
                 fieldmap_mag.parent / f"{Path(fieldmap_mag.stem).stem}_mask{FSLOUTTYPE}"
             )
             fieldcoef, movpar, mask = self.params_for_eddy(subj)
-            highres_brain = self.BrainExtract(subj, anat)
+            highres_brain,highres_mask = self.prep_anat(subj,anat)
             if func:
                 feat = self.prep_feat(
                     subj, func, highres_brain, fieldmap_mag, fieldmap_rad
@@ -538,9 +565,6 @@ class BidsPrep:
                     highres2func,
                     standard2highres,
                 ) = self.load_transforms(feat)
-                # self.generate_atlas(
-                #     subj, epi_file, highres, highres2func, standard2highres
-                # )
             if dwi:
                 mrt_folder = self.initiate_mrtrix_dir(subj)
                 motion_corrected = self.MotionCorrect(subj, dwi, "dwi")
@@ -550,20 +574,18 @@ class BidsPrep:
                 denoised = self.dwi_denoise(new_dwi, new_mask)
                 degibbs = self.unring(denoised)
                 dwi_preprocessed = self.DWI_preproc(degibbs, new_phasediff)
-                # self.run_eddy(
-                #    subj, dwi, mask, index, acq, bvec, bval, fieldcoef, movpar
-                # )
+                bias_corr = self.bias_correct(dwi_preprocessed)
+                # dwi_preprocessed = self.convert_mif2nifti(bias_corr)
+                t1_reg, t1_mask = self.reg_dwi_to_t1(
+                    bias_corr, mask, new_anat, highres_mask
+                )
+                vis, five_tissue = dmri_methods.five_tissue(t1_reg, t1_mask)
+                self.convert_mif2nifti(subj)
             elapsed = (time.time() - t) / 60
             print("%s`s preproceesing procedures took %.2f minutes." % (subj, elapsed))
 
 
 if __name__ == "__main__":
     bids_dir = Path("/home/gal/bids_dataset")
-    t = BidsPrep(mother_dir=bids_dir, subj="sub-01", seq="func", skip_bids=True)
+    t = BidsPrep(mother_dir=bids_dir, subj="sub-01", skip_bids=True)
     t.run()
-
-# to run ICA-AROMA:
-# 1. bet T1
-# 2. epi-reg from rest to t1 (.mat)
-# 3. fnirt from t1 to mni (.nii.gz)
-# 4. mcflirt rest (.par)

@@ -217,15 +217,15 @@ def TopUp(merged: Path, datain: Path, fieldmap: Path):
         datain {Path} -- [phase encoding .txt file]
         fieldmap {Path} -- [output fieldmap file]
     """
-    unwarped = fieldmap.with_name(f"unwarped{FSLOUTTYPE}")
+    unwarped = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_unwarped{FSLOUTTYPE}")
     cmd = (
         f"topup --imain={merged} --datain={datain} --fout={fieldmap} --iout={unwarped}"
     )
     os.system(cmd)
-    fieldmap_rads = fieldmap.with_name(fieldmap.stem + f"_rad{FSLOUTTYPE}")
+    fieldmap_rads = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_rad{FSLOUTTYPE}")
     cmd = f"fslmaths {fieldmap} -mul 6.28 {fieldmap_rads}"
     os.system(cmd)
-    fieldmap_mag = fieldmap.with_name(fieldmap.stem + f"_magnitude{FSLOUTTYPE}")
+    fieldmap_mag = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_magnitude{FSLOUTTYPE}")
     cmd = f"fslmaths {unwarped} -Tmean {fieldmap_mag}"
     os.system(cmd)
     return fieldmap_mag, fieldmap_rads

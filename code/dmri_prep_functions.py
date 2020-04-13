@@ -121,7 +121,7 @@ def load_initial_files(folder_name: str, data_type: str):
         return anat_file, func_file, sbref_file, dwi_file, PA_file
 
 
-def convert_to_mif(in_file, out_file, bvec=None, bval=None):
+def convert_to_mif(in_file, out_file, bvec=None, bval=None,anat = False):
     mrconvert = mrt.MRConvert()
     mrconvert.inputs.in_file = in_file
     mrconvert.inputs.out_file = out_file
@@ -130,6 +130,8 @@ def convert_to_mif(in_file, out_file, bvec=None, bval=None):
             f"-json_import {mrconvert.inputs.in_file.replace('nii.gz','json')}"
         )
         mrconvert.inputs.grad_fsl = (bvec, bval)
+    if anat:
+        mrconvert.inputs.args = "-strides +1,+2,+3"
     mrconvert.run()
     return out_file
 
@@ -331,17 +333,26 @@ def reg_dwi_T1(
     return t1_registered, t1_mask_registered
 
 
-def five_tissue(t1_registered: str, t1_mask_registered):
-    out_file = f"{os.path.dirname(t1_registered)}/5TT.mif"
-    out_vis = f"{os.path.dirname(t1_registered)}/vis.mif"
+def five_tissue(t1_registered: Path, t1_mask_registered:Path):
+    """
+    Generate 5TT (5-tissue-type) image based on the registered T1 image.
+    Arguments:
+        t1_registered {Path} -- [T1 registered to DWI space]
+        t1_mask_registered {Path} -- [T1 mask]
+
+    Returns:
+        [type] -- [5TT and vis files]
+    """
+    out_file = Path(t1_registered.parent/"5TT.mif")
+    out_vis = Path(t1_registered.parent/"vis.mif")
     seg = mrt.Generate5tt()
     seg.inputs.in_file = t1_registered
     seg.inputs.out_file = out_file
     seg.inputs.algorithm = "fsl"
     cmd = seg.cmdline + f" -mask {t1_mask_registered}"
     print(cmd)
-    os.system(cmd)
-    os.system(f"5tt2vis {out_file} {out_vis}")
+    seg.run()
+    os.system(f"5tt2vis {str(out_file)} {str(out_vis)}")
     return out_vis, out_file
 
 
