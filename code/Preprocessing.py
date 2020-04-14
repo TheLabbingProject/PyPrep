@@ -32,9 +32,12 @@ class BidsPrep:
         Initiate the BIDS preprocessing class with either a specific subject or None = all subjects (default)
         Arguments:
             mother_dir {Path} -- [Path to a BIDS compliant directory (should contain "mother_dir/sub-xx")]
+
         Keyword Arguments:
-            subj (str) -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
-            design (Path) -- [Path to FEAT's design template.] (default: {'/templates/design.fsf'})
+            subj {str} -- ["sub-xx" for specific subject or None for all subjects] (default: {None})
+            out_dir {Path} -- [Output directory. Default is "derivatives" at the same directory level as {mother_dir}] (default: {None})
+            design {Path} -- [Path to FEAT's design template.] (default: {'/templates/design.fsf'})
+            skip_bids {bool} -- [wether to skip the BIDS-compatibility section] (default: {False})
         """
         self.mother_dir = Path(mother_dir)
         self.subjects = list()
@@ -519,11 +522,14 @@ class BidsPrep:
         """
         anat_dir = Path(self.out_dir / subj / "anat" / "prep")
         cmd = f"fsl_anat -i {str(anat)} -o {str(anat_dir)}"
-        print("Performing structural preprocessing using fsl_anat:")
-        print(cmd)
-        os.system(cmd)
-        highres_brain = anat_dir / f"T1_biascorr_brain{FSLOUTTYPE}"
-        highres_mask = anat_dir / f"T1_biascorr_brain_mask{FSLOUTTYPE}"
+        if not Path(f"{anat_dir}.anat").is_dir():
+            print("Performing structural preprocessing using fsl_anat:")
+            print(cmd)
+            os.system(cmd)
+        else:
+            print("Structural preprocessing already done.")
+        highres_brain = Path(f"{anat_dir}.anat") / f"T1_biascorr_brain{FSLOUTTYPE}"
+        highres_mask = Path(f"{anat_dir}.anat") / f"T1_biascorr_brain_mask{FSLOUTTYPE}"
         return highres_brain,highres_mask
 
     def run(self):

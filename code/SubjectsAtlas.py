@@ -24,6 +24,16 @@ class SubjectsAtlas:
         out_dir: Path = None,
         use_feat: bool = True,
     ):
+        """
+
+        Arguments:
+            derivatives_dir {Path} -- [Path to derivatives directory (preprocessed using PyPrep.code.Preprocessing)]
+
+        Keyword Arguments:
+            atlas {Path} -- [Path to atlas' directory (must contain highres and labels files)] (default: {megaatlas})
+            subj {str} -- ["sub-xx" for specific subject or None for all subjects] (default: {None (i.e all subjects)})
+            out_dir {Path} -- [Output directory] (default: {"{derivatives_dir}/sub-xx/atlases)
+        """
         for f in atlas.iterdir():
             if "highres.nii" in str(f):
                 self.highres_atlas = f
@@ -59,7 +69,8 @@ class SubjectsAtlas:
         for f in dwi_dir.iterdir():
             if "meanbzero" in str(f):
                 dwi = f
-        return standard2highres_warp, highres_brain, dwi
+        func = self.derivatives / subj / "func" / "func.feat" / f"mean_func{FSLOUTTYPE}"
+        return standard2highres_warp, highres_brain, dwi, func
 
     def get_transofrm(self, subj: str):
         """
@@ -106,7 +117,9 @@ class SubjectsAtlas:
             aw.run()
         return out_file
 
-    def resample_to_dwi(self, dwi: Path, standard_in_highres: Path, out_dir: Path):
+    def resample_to_dwi(
+        self, epi: Path, standard_in_highres: Path, out_dir: Path, epi_type: str
+    ):
         """[summary]
 
         Arguments:
@@ -118,12 +131,12 @@ class SubjectsAtlas:
             atlas_type = "highres"
         elif "labels_atlas" in str(standard_in_highres):
             atlas_type = "labels"
-        out_file = out_dir / f"{atlas_type}_atlas2dwi{FSLOUTTYPE}"
-        out_matrix_file = out_dir / f"{atlas_type}_atlas2dwi_affine.mat"
+        out_file = out_dir / f"{atlas_type}_atlas2{epi_type}{FSLOUTTYPE}"
+        out_matrix_file = out_dir / f"{atlas_type}_atlas2{epi_type}_affine.mat"
         if not out_file.is_file():
-            print("Resampling atlas from highres space to dwi image...")
+            print(f"Resampling atlas from highres space to {epi_type} image...")
             flt = reg_functions.highres2dwi(
-                standard_in_highres, dwi, out_file, out_matrix_file
+                standard_in_highres, epi, out_file, out_matrix_file
             )
             print(flt.cmdline)
             flt.run()
@@ -151,5 +164,13 @@ class SubjectsAtlas:
                 self.apply_warp(warp, atlas, highres_brain, out_dir)
                 for atlas in [self.highres_atlas, self.labels_atlas]
             ]
-            aff1,aff2 = [self.resample_to_dwi(dwi, atlas, out_dir) for atlas in [atlas2highres,labels2highres]]
-            #self.apply_affine(dwi, labels2highres, aff, out_dir)
+            aff1, aff2 = [
+                self.resample_to_dwi(dwi, atlas, out_dir, "dwi")
+                for atlas in [atlas2highres, labels2highres]
+            ]
+            aff3, aff4 = [
+                self.resample_to_dwi(func, atlas, out_dir, "func")
+                for atlas in [atlas2highres, labels2highres]
+            ]
+
+            # self.apply_affine(dwi, labels2highres, aff, out_dir)
