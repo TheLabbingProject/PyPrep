@@ -48,6 +48,7 @@ class SubjectsAtlas:
                 Path(cur_subj).name
                 for cur_subj in glob.glob(f"{self.derivatives}/sub-*")
             ]
+        self.subjects.sort()
         self.out_dir = []
         if out_dir:
             self.out_dir.append(out_dir)
@@ -140,7 +141,7 @@ class SubjectsAtlas:
             )
             print(flt.cmdline)
             flt.run()
-        return out_matrix_file
+        return out_file
 
     def apply_affine(self, dwi: Path, labels: Path, aff: Path, out_dir: Path):
         """[summary]
@@ -159,18 +160,20 @@ class SubjectsAtlas:
 
     def run(self):
         for subj, out_dir in zip(self.subjects, self.out_dir):
-            warp, highres_brain, dwi = self.load_files(subj)
+            warp, highres_brain, dwi, func = self.load_files(subj)
             atlas2highres, labels2highres = [
                 self.apply_warp(warp, atlas, highres_brain, out_dir)
                 for atlas in [self.highres_atlas, self.labels_atlas]
             ]
-            aff1, aff2 = [
+            highres_atlas, labels_atlas = [
                 self.resample_to_dwi(dwi, atlas, out_dir, "dwi")
                 for atlas in [atlas2highres, labels2highres]
             ]
-            aff3, aff4 = [
+            reg_functions.RoundAtlas(labels2highres)
+            highres_atlas, labels_atlas = [
                 self.resample_to_dwi(func, atlas, out_dir, "func")
                 for atlas in [atlas2highres, labels2highres]
             ]
+            reg_functions.RoundAtlas(labels2highres)
 
             # self.apply_affine(dwi, labels2highres, aff, out_dir)

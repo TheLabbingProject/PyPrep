@@ -1,7 +1,7 @@
 from nipype.interfaces import fsl
 from pathlib import Path
-
-
+import nibabel as nib
+import numpy as np
 def invert_warp(in_file: Path, ref: Path, out_warp: Path, in_warp: Path):
     """
     Apply FSL's invwarp to invert a warp file
@@ -64,3 +64,10 @@ def highres2dwi(highres: Path, dwi: Path, out_file: Path, out_matrix_file: Path)
     flt.inputs.out_file = out_file
     flt.inputs.out_matrix_file = out_matrix_file
     return flt
+
+def RoundAtlas(atlas_file:str):
+    img = nib.load(atlas_file)
+    orig_data = img.get_fdata()
+    new_data = np.round(orig_data)
+    new_img = nib.Nifti1Image(new_data.astype(int),img.affine)
+    nib.save(new_img,atlas_file)

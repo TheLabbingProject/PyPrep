@@ -345,14 +345,16 @@ def five_tissue(t1_registered: Path, t1_mask_registered:Path):
     """
     out_file = Path(t1_registered.parent/"5TT.mif")
     out_vis = Path(t1_registered.parent/"vis.mif")
-    seg = mrt.Generate5tt()
-    seg.inputs.in_file = t1_registered
-    seg.inputs.out_file = out_file
-    seg.inputs.algorithm = "fsl"
-    cmd = seg.cmdline + f" -mask {t1_mask_registered}"
-    print(cmd)
-    seg.run()
-    os.system(f"5tt2vis {str(out_file)} {str(out_vis)}")
+    if not out_file.is_file():
+        seg = mrt.Generate5tt()
+        seg.inputs.in_file = t1_registered
+        seg.inputs.out_file = out_file
+        seg.inputs.algorithm = "fsl"
+        cmd = seg.cmdline + f" -mask {t1_mask_registered}"
+        print(cmd)
+        seg.run()
+    if not out_vis.is_file():
+        os.system(f"5tt2vis {str(out_file)} {str(out_vis)}")
     return out_vis, out_file
 
 

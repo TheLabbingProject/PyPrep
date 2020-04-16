@@ -52,11 +52,10 @@ class BidsPrep:
         if not out_dir:
             out_dir = Path(self.mother_dir.parent / "derivatives")
         self.out_dir = out_dir
-        #self.atlas = Path(atlas)
+        # self.atlas = Path(atlas)
         self.subjects.sort()
 
         self.skip_bids = skip_bids
-
 
     def check_bids(self, mother_dir=None):
         if not mother_dir:
@@ -209,7 +208,8 @@ class BidsPrep:
             print(
                 "Input files isn't a 4D image, therefore isn't elligable for motion correction."
             )
-        Path(out_file).rename(in_file)
+        shutil.copy(str(out_file), str(in_file))
+        # Path(out_file).rename(in_file)
 
         return in_file
 
@@ -251,10 +251,6 @@ class BidsPrep:
             os.system(f"feat {fsf}")
         return out_feat
 
-
-
-
-
     def load_transforms(self, feat: str):
         reg_dir = Path(f"{feat}/reg")
         for f in os.listdir(reg_dir):
@@ -266,7 +262,6 @@ class BidsPrep:
                 highres = str(reg_dir / f)
         epi_file = str(Path(feat) / "mean_func.nii.gz")
         return epi_file, highres, highres2func_aff, standard2highres_aff
-
 
     def params_for_eddy(self, subj):
         """
@@ -437,6 +432,7 @@ class BidsPrep:
                     "fieldmap" in f_name or "b0" in f_name or "PA" in f_name
                 ) and "mif" in f_name:
                     f.unlink()
+                    continue
                 elif (
                     ("T1" in f_name or "vis" in f_name or "5TT" in f_name)
                     and "mif" in f_name
@@ -513,7 +509,7 @@ class BidsPrep:
             )
         return t1_registered, t1_mask_registered
 
-    def prep_anat(self,subj:str,anat:Path):
+    def prep_anat(self, subj: str, anat: Path):
         """[summary]
 
         Arguments:
@@ -530,7 +526,8 @@ class BidsPrep:
             print("Structural preprocessing already done.")
         highres_brain = Path(f"{anat_dir}.anat") / f"T1_biascorr_brain{FSLOUTTYPE}"
         highres_mask = Path(f"{anat_dir}.anat") / f"T1_biascorr_brain_mask{FSLOUTTYPE}"
-        return highres_brain,highres_mask
+        highres = Path(f"{anat_dir}.anat") / f"T1_biascorr{FSLOUTTYPE}"
+        return highres, highres_brain, highres_mask
 
     def run(self):
         """
@@ -560,7 +557,7 @@ class BidsPrep:
                 fieldmap_mag.parent / f"{Path(fieldmap_mag.stem).stem}_mask{FSLOUTTYPE}"
             )
             fieldcoef, movpar, mask = self.params_for_eddy(subj)
-            highres_brain,highres_mask = self.prep_anat(subj,anat)
+            highres_head, highres_brain, highres_mask = self.prep_anat(subj, anat)
             if func:
                 feat = self.prep_feat(
                     subj, func, highres_brain, fieldmap_mag, fieldmap_rad
@@ -575,7 +572,13 @@ class BidsPrep:
                 mrt_folder = self.initiate_mrtrix_dir(subj)
                 motion_corrected = self.MotionCorrect(subj, dwi, "dwi")
                 new_anat, new_dwi, new_mask, new_phasediff = self.transfer_files_to_mrt(
-                    mrt_folder, motion_corrected, mask, anat, bvec, bval, phasediff,
+                    mrt_folder,
+                    motion_corrected,
+                    mask,
+                    Path(highres_head),
+                    bvec,
+                    bval,
+                    phasediff,
                 )
                 denoised = self.dwi_denoise(new_dwi, new_mask)
                 degibbs = self.unring(denoised)
