@@ -165,15 +165,25 @@ class SubjectsAtlas:
                 self.apply_warp(warp, atlas, highres_brain, out_dir)
                 for atlas in [self.highres_atlas, self.labels_atlas]
             ]
-            highres_atlas, labels_atlas = [
+            atlas2dwi, labels2dwi = [
                 self.resample_to_dwi(dwi, atlas, out_dir, "dwi")
                 for atlas in [atlas2highres, labels2highres]
             ]
             reg_functions.RoundAtlas(labels2highres)
-            highres_atlas, labels_atlas = [
+            atlas2func, labels2func = [
                 self.resample_to_dwi(func, atlas, out_dir, "func")
                 for atlas in [atlas2highres, labels2highres]
             ]
             reg_functions.RoundAtlas(labels2highres)
-
+            [
+                reg_functions.RoundAtlas(atlas)
+                for atlas in [
+                    atlas2highres,
+                    labels2highres,
+                    atlas2dwi,
+                    labels2dwi,
+                    atlas2func,
+                    labels2func,
+                ]
+            ]
             # self.apply_affine(dwi, labels2highres, aff, out_dir)

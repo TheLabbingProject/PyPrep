@@ -1,3 +1,5 @@
+__pycache__/
+.ipynb_checkpoints
 MegaAtlas_Labels_highres_log.txt
 ToDo.txt
 Untitled.ipynb

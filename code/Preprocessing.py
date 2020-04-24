@@ -431,7 +431,7 @@ class BidsPrep:
                 if (
                     "fieldmap" in f_name or "b0" in f_name or "PA" in f_name
                 ) and "mif" in f_name:
-                    f.unlink()
+#                    f.unlink()
                     continue
                 elif (
                     ("T1" in f_name or "vis" in f_name or "5TT" in f_name)
@@ -450,8 +450,8 @@ class BidsPrep:
                     if not out_file.is_file():
                         print(f"Converting {f_name} to {out_file}.")
                         dmri_methods.convert_to_mif(f, out_file)
-                if "mif" in f_name:
-                    f.unlink()
+#                if "mif" in f_name:
+#                    f.unlink()
 
     def bias_correct(self, preprocessed: Path):
         """
@@ -539,6 +539,7 @@ class BidsPrep:
         if not self.skip_bids:
             self.check_bids(self.mother_dir)
         for subj in self.subjects:
+            print(f"Currently working on {subj}")
             t = time.time()
             self.set_output_dir(subj)
             (
