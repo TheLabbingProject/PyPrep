@@ -168,7 +168,7 @@ class GenerateOutputDirectory:
     def run(self):
         self.generate_directories()
         print(f"Output directory`s tree:")
-        paths = DisplayablePath.make_tree(self.derivatives_dir)
+        paths = DisplayablePath.make_tree(self.derivatives_dir/self.subj)
         for path in paths:
             print(path.displayable())
 
@@ -195,7 +195,7 @@ class GenerateFieldMap:
         self.index_file = self.out_dir / "index.txt"
         self.fieldmap = self.out_dir / f"fieldmap{FSLOUTTYPE}"
         self.fieldmap_rad = Path(
-            self.fieldmap.parent / f"{Path(self.fieldmap.stem).stem}_rad{FSLOUTTYPE}"
+        self.fieldmap.parent / f"{Path(self.fieldmap.stem).stem}_rad{FSLOUTTYPE}"
         )
         self.fieldmap_mag = Path(
             self.fieldmap.parent
@@ -271,7 +271,6 @@ class GenerateFieldMap:
             bet = BrainExtraction(
                 in_file=self.fieldmap_mag,
                 out_file=self.fieldmap_mag_brain,
-                seq=self.seq,
             )
             fieldmap_brain = bet.run()
 
@@ -297,10 +296,9 @@ class BrainExtraction:
 
     """
 
-    def __init__(self, in_file: Path, seq: str, out_file: Path = None):
+    def __init__(self, in_file: Path, out_file: Path = None):
         self.in_file = in_file
         self.out_file = out_file
-        self.seq = seq
         if not out_file:
             self.exist = False
         else:
@@ -388,7 +386,7 @@ class FEAT:
             out_dir=self.out_feat,
             in_file=self.epi_file,
             highres_brain=self.highres,
-            temp_design=self.temp_design,
+            temp_design=self.design_template,
             out_design=self.subj_design,
             fieldmap_rad=self.fieldmap_rad,
             fieldmap_brain=self.fieldmap_brain,
@@ -467,7 +465,7 @@ class InitiateMrtrix:
                 else:
                     if "AP" in str(f):
                         print("Importing DWI data into temporary directory")
-                        new_dwi = dmri_methods.convert_to_mif(f, new_f, bvec, bval)
+                        new_dwi = dmri_methods.convert_to_mif(f, new_f, self.bvec, self.bval)
                     elif "PA" in str(f):
                         print(
                             "Importing reversed phased encode data into temporary directory"
@@ -665,7 +663,7 @@ class BiasCorrect:
             self.bias_correct()
         else:
             print("Initial B1 bias field correction already done. Continuing.")
-
+        return self.out_file
 
 class GenerateFiveTissue:
     def __init__(self, dwi: Path, dwi_mask: Path, anat: Path, anat_mask: Path):
@@ -783,7 +781,7 @@ class StructuralPreprocessing:
             self.preprocess_anat()
         else:
             print("Structural preprocessing already done. Continuing.")
-        return self.highres, self.highres_mask, self.highres_brain
+        return self.highres,self.highres_brain, self.highres_mask,
 
 
 class PreprocessPipeline:
@@ -879,11 +877,8 @@ class PreprocessPipeline:
         feat.run()
 
     def motion_correct(self, subj: str, dwi: Path):
-        f_name = Path(dwi).name
-        # new_f = Path(Path(f_name).stem).stem + f"_MotionCorrected{FSLOUTTYPE}"
-        motion_corrected = self.derivatives / subj / "dwi" / f_name
-        init_correction = MotionCorrection(dwi, motion_corrected)
-        logging.info(init_correction)
+        init_correction = MotionCorrection(dwi, dwi)
+        logging.info("Performing motion correction for DWI image.")
         motion_corrected = init_correction.run()
         return motion_corrected
 
@@ -959,6 +954,7 @@ class PreprocessPipeline:
             anat, func, sbref, dwi, bvec, bval, phasediff, str_to_print = self.print_start(
                 subj
             )
+            logging.info(str_to_print)
             fieldmap_rad, fieldmap_mag_brain, mask, index, acq = self.generate_field_map(
                 subj, dwi, phasediff
             )
@@ -987,3 +983,8 @@ class PreprocessPipeline:
                         % (subj, elapsed)
                     )
                 )
+
+if __name__ == "__main__":
+    bids_dir = Path("/home/gal/bids_dataset")
+    bids_prep = PreprocessPipeline(bids_dir,subj='sub-09',skip_bids=True)
+    bids_prep.run()

@@ -110,13 +110,14 @@ def convert_to_mif(in_file, out_file, bvec=None, bval=None, anat=False):
     mrconvert = mrt.MRConvert()
     mrconvert.inputs.in_file = in_file
     mrconvert.inputs.out_file = out_file
+    mrconvert.inputs.args = "-quiet"
     if bvec and bval:
         mrconvert.inputs.args = (
             f"-json_import {mrconvert.inputs.in_file.replace('nii.gz','json')}"
         )
         mrconvert.inputs.grad_fsl = (bvec, bval)
     if anat:
-        mrconvert.inputs.args = "-strides +1,+2,+3"
+        mrconvert.inputs.args = "-strides +1,+2,+3 -quiet"
     mrconvert.run()
     return out_file
 
