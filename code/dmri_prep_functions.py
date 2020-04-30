@@ -8,21 +8,6 @@ from pathlib import Path
 from nilearn.image import index_img
 
 
-def GenIndex(epi_file: Path, index_file: Path):
-    """
-    Generates index.txt file, needed to run eddy-currents corrections.
-    Arguments:
-        epi_file {Path} -- [Path to dwi file]
-        index_file {Path} -- [Path to output index.txt file]
-    """
-    img = nib.load(epi_file)
-    n_frames = img.shape[3]
-    with open(index_file, "w") as in_file:
-        for i in range(n_frames):
-            in_file.write("1\n")
-        in_file.close()
-
-
 def eddy_correct(
     in_file: Path,
     mask: Path,
@@ -121,7 +106,7 @@ def load_initial_files(folder_name: str, data_type: str):
         return anat_file, func_file, sbref_file, dwi_file, PA_file
 
 
-def convert_to_mif(in_file, out_file, bvec=None, bval=None,anat = False):
+def convert_to_mif(in_file, out_file, bvec=None, bval=None, anat=False):
     mrconvert = mrt.MRConvert()
     mrconvert.inputs.in_file = in_file
     mrconvert.inputs.out_file = out_file
@@ -136,7 +121,7 @@ def convert_to_mif(in_file, out_file, bvec=None, bval=None,anat = False):
     return out_file
 
 
-def Denoise(in_file: Path, in_mask: Path, out_file: Path):
+def denoise_dwi(in_file: Path, in_mask: Path, out_file: Path):
     denoise = mrt.DWIDenoise()
     denoise.inputs.in_file = in_file
     denoise.inputs.noise = in_file.with_name(in_file.stem + "_noise.mif")
@@ -146,7 +131,7 @@ def Denoise(in_file: Path, in_mask: Path, out_file: Path):
     return denoise
 
 
-def Unring(in_file: Path, out_file: Path):
+def unring_dwi(in_file: Path, out_file: Path):
     unring = mrt.MRDeGibbs()
     unring.inputs.in_file = in_file
     unring.inputs.out_file = out_file
@@ -154,7 +139,7 @@ def Unring(in_file: Path, out_file: Path):
     return unring
 
 
-def DWI_prep(
+def dwi_prep(
     degibbs: Path, PA: Path, out_file: Path, data_type: str = "dwi", func=None
 ):
     eddy_dir = Path(degibbs.parent / "eddyqc")
@@ -289,39 +274,43 @@ def gen_tissues_orient(fod_wm, fod_gm, fod_csf):
     return tissues
 
 
-def DWI_to_T1_cont(dwi_file: str, dwi_mask: str, t1_file: str, t1_mask: str):
-    meanbzero = dwi_file.replace(".mif", "_meanbzero.mif")
+def dwi_to_T1_coreg(dwi_file: Path, dwi_mask: Path, t1_file: Path, t1_mask: Path):
+    parent = dwi_file.parent
+    meanbzero = parent / f"{dwi_file.stem}_meanbzero.mif"
+    # meanbzero = dwi_file.replace(".mif", "_meanbzero.mif")
     cmd = f"dwiextract {dwi_file} -bzero - | mrcalc - 0.0 -max - | mrmath - mean -axis 3 {meanbzero}"
     print(cmd)
     os.system(cmd)
-    dwi_pseudoT1 = dwi_file.replace(".mif", "_pseudoT1.mif")
+    dwi_pseudoT1 = parent / f"{dwi_file.stem}_pseudoT1.mif"
+    # dwi_pseudoT1 = dwi_file.replace(".mif", "_pseudoT1.mif")
     cmd = f"mrcalc 1 {meanbzero} -div {dwi_mask} -mult - | mrhistmatch nonlinear - {t1_file} {dwi_pseudoT1} -mask_input {dwi_mask} -mask_target {t1_mask}"
     print(cmd)
     os.system(cmd)
-    T1_pseudobzero = f"{os.path.dirname(dwi_file)}/T1_pseudobzero.mif"
+    T1_pseudobzero = parent / "T1_pseudobzero.mif"
+    # T1_pseudobzero = f"{os.path.dirname(dwi_file)}/T1_pseudobzero.mif"
     cmd = f"mrcalc 1 {t1_file} -div {t1_mask} -mult - | mrhistmatch nonlinear - {meanbzero} {T1_pseudobzero} -mask_input {t1_mask} -mask_target {dwi_mask}"
     print(cmd)
     os.system(cmd)
     return meanbzero, dwi_pseudoT1, T1_pseudobzero
 
 
-def reg_dwi_T1(
-    dwi_file: str,
-    t1_brain: str,
-    dwi_pseudoT1: str,
-    T1_pseudobzero: str,
-    meanbzero: str,
-    t1_mask: str,
-    dwi_mask: str,
+def reg_dwi_to_t1(
+    dwi_file: Path,
+    t1_brain: Path,
+    dwi_pseudoT1: Path,
+    T1_pseudobzero: Path,
+    meanbzero: Path,
+    t1_mask: Path,
+    dwi_mask: Path,
     run: bool,
 ):
-    working_dir = os.path.dirname(dwi_file)
-    t1_registered = f"{working_dir}/T1_registered.mif"
-    t1_mask_registered = f"{working_dir}/T1_mask_registered.mif"
+    working_dir = dwi_file.parent
+    t1_registered = working_dir / "T1_registered.mif"
+    t1_mask_registered = working_dir / "T1_mask_registered.mif"
     if run:
-        rig_t1_to_pseudoT1 = f"{working_dir}/rigid_T1_to_pseudoT1.txt"
-        rig_t1_to_dwi = f"{working_dir}/rigid_T1_to_dwi.txt"
-        rig_pseudob0_to_b0 = f"{working_dir}/rigid_pseudobzero_to_bzero.txt"
+        rig_t1_to_pseudoT1 = working_dir / "rigid_T1_to_pseudoT1.txt"
+        rig_t1_to_dwi = working_dir / "rigid_T1_to_dwi.txt"
+        rig_pseudob0_to_b0 = working_dir / "rigid_pseudobzero_to_bzero.txt"
         cmd_1 = f"mrregister {t1_brain} {dwi_pseudoT1} -type rigid -mask1 {t1_mask} -mask2 {dwi_mask} -rigid {rig_t1_to_pseudoT1}"
         cmd_2 = f"mrregister {T1_pseudobzero} {meanbzero} -type rigid -mask1 {t1_mask} -mask2 {dwi_mask} -rigid {rig_pseudob0_to_b0}"
         cmd_3 = f"transformcalc {rig_t1_to_pseudoT1} {rig_pseudob0_to_b0} average {rig_t1_to_dwi}"
@@ -333,7 +322,7 @@ def reg_dwi_T1(
     return t1_registered, t1_mask_registered
 
 
-def five_tissue(t1_registered: Path, t1_mask_registered:Path):
+def five_tissue(t1_registered: Path, t1_mask_registered: Path):
     """
     Generate 5TT (5-tissue-type) image based on the registered T1 image.
     Arguments:
@@ -343,8 +332,8 @@ def five_tissue(t1_registered: Path, t1_mask_registered:Path):
     Returns:
         [type] -- [5TT and vis files]
     """
-    out_file = Path(t1_registered.parent/"5TT.mif")
-    out_vis = Path(t1_registered.parent/"vis.mif")
+    out_file = Path(t1_registered.parent / "5TT.mif")
+    out_vis = Path(t1_registered.parent / "vis.mif")
     if not out_file.is_file():
         seg = mrt.Generate5tt()
         seg.inputs.in_file = t1_registered

@@ -74,15 +74,7 @@ def load_initial_files(mother_dir: Path, sub: str):
         if "PA_epi.nii" in str(file):
             phasediff = file
 
-    return (
-        anat_file,
-        func_file,
-        sbref_file,
-        dwi_file,
-        bvec,
-        bval,
-        phasediff,
-    )
+    return (anat_file, func_file, sbref_file, dwi_file, bvec, bval, phasediff)
 
 
 check_nifti_output()
@@ -103,8 +95,7 @@ def list_files(startpath: str):
             if ".DS_Store" not in f:
                 print("{}{}".format(subindent, f))
 
-
-def BetBrainExtract(in_file: Path, out_file: Path = None):
+def bet_brain_extract(in_file: Path, out_file: Path = None):
     """
     Perform brain extraction using FSL's BET.
     Arguments:
@@ -137,10 +128,10 @@ def BetBrainExtract(in_file: Path, out_file: Path = None):
         bet.inputs.functional = True  # perform bet on all frames
     else:
         bet.inputs.robust = True  # better outcome for structural images
-    return bet
+    return bet, out_file    
 
 
-def MotionCorrect(in_file: Path, out_file: Path):
+def motion_correct(in_file: Path, out_file: Path):
     """
     Perform motion correction using FSL's MCFLIRT
     Arguments:
@@ -153,7 +144,7 @@ def MotionCorrect(in_file: Path, out_file: Path):
     return mcflt
 
 
-def MergePhases(in_file: Path, phasediff: Path, merged: Path):
+def merge_phases(in_file: Path, phasediff: Path, merged: Path):
     """
     Combine two images into one 4D file
     Arguments:
@@ -169,8 +160,20 @@ def MergePhases(in_file: Path, phasediff: Path, merged: Path):
     merger.inputs.merged_file = merged
     return merger
 
-
-def GenDatain(AP: Path, PA: Path, datain: Path):
+def generate_index(epi_file: Path, index_file: Path):
+    """
+    Generates index.txt file, needed to run eddy-currents corrections.
+    Arguments:
+        epi_file {Path} -- [Path to dwi file]
+        index_file {Path} -- [Path to output index.txt file]
+    """
+    img = nib.load(epi_file)
+    n_frames = img.shape[3]
+    with open(index_file, "w") as in_file:
+        for i in range(n_frames):
+            in_file.write("1\n")
+        in_file.close()
+def generate_datain(AP: Path, PA: Path, datain: Path):
     """
     Generate datain.txt file for topup
     Arguments:
@@ -209,7 +212,7 @@ def Calculate_b0_params(json_file: Path):
     return effective_spacing, total_readout, TE
 
 
-def TopUp(merged: Path, datain: Path, fieldmap: Path):
+def top_up(merged: Path, datain: Path, fieldmap: Path):
     """
     Generate Fieldmap
     Arguments:
@@ -217,19 +220,23 @@ def TopUp(merged: Path, datain: Path, fieldmap: Path):
         datain {Path} -- [phase encoding .txt file]
         fieldmap {Path} -- [output fieldmap file]
     """
-    unwarped = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_unwarped{FSLOUTTYPE}")
+    unwarped = Path(
+        fieldmap.parent / f"{Path(fieldmap.stem).stem}_unwarped{FSLOUTTYPE}"
+    )
     cmd = (
         f"topup --imain={merged} --datain={datain} --fout={fieldmap} --iout={unwarped}"
     )
     os.system(cmd)
-    fieldmap_rads = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_rad{FSLOUTTYPE}")
+    fieldmap_rads = Path(
+        fieldmap.parent / f"{Path(fieldmap.stem).stem}_rad{FSLOUTTYPE}"
+    )
     cmd = f"fslmaths {fieldmap} -mul 6.28 {fieldmap_rads}"
     os.system(cmd)
-    fieldmap_mag = Path(fieldmap.parent / f"{Path(fieldmap.stem).stem}_magnitude{FSLOUTTYPE}")
+    fieldmap_mag = Path(
+        fieldmap.parent / f"{Path(fieldmap.stem).stem}_magnitude{FSLOUTTYPE}"
+    )
     cmd = f"fslmaths {unwarped} -Tmean {fieldmap_mag}"
     os.system(cmd)
-    return fieldmap_mag, fieldmap_rads
-
 
 class FeatDesign:
     def __init__(
