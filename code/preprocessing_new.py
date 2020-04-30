@@ -456,7 +456,7 @@ class InitiateMrtrix:
         print("Converting files to .mif format...")
         for f in files_list:
             f_name = Path(f.stem).stem + ".mif"
-            new_f = Path(mrt_folder / f_name)
+            new_f = Path(self.mrtrix_dir / f_name)
             if not new_f.is_file():
                 if "T1" in str(f):
                     print("Importing T1 image into temporary directory")
@@ -914,16 +914,19 @@ class PreprocessPipeline:
         degibbser = Unring(denoised)
         logging.info(degibbser)
         degibbsed = degibbser.run()
+        return degibbsed
 
     def eddy_correct(self, degibbs: Path, phasediff: Path):
         eddy_corrector = PreprocessDWI(degibbs, phasediff)
         logging.info(eddy_corrector)
         eddy_corrected = eddy_corrector.run()
+        return eddy_corrected
 
     def bias_correct(self, preprocessed: Path):
         bias_corrector = BiasCorrect(preprocessed)
         logging.info(bias_corrector)
         bias_corrected = bias_corrector.run()
+        return bias_corrected
 
     def generate_five_tissue(
         self, dwi: Path, dwi_mask: Path, anat: Path, anat_mask: Path
@@ -953,8 +956,8 @@ class PreprocessPipeline:
             print(f"Currently preprocessing {subj}'s images.'")
             t = time.time()
             self.generate_output_directory(subj)
-            anat, func, sbref, dwi, bvec, bval, phasediff, str_to_print = (
-                self.print_start()
+            anat, func, sbref, dwi, bvec, bval, phasediff, str_to_print = self.print_start(
+                subj
             )
             fieldmap_rad, fieldmap_mag_brain, mask, index, acq = self.generate_field_map(
                 subj, dwi, phasediff
