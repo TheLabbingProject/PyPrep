@@ -628,7 +628,7 @@ class ConvertMif2Nifti:
                         dmri_methods.convert_to_mif(f, out_file)
                 elif ("dwi" in f_name or "AP" in f_name) and "mif" in f_name:
                     if "preprocessed" in f_name:
-                        out_file = self.dwi / f"{subj}_acq-AP_{f.stem}{FSLOUTTYPE}"
+                        out_file = self.dwi / f"{self.subj}_acq-AP_{f.stem}{FSLOUTTYPE}"
                     else:
                         out_file = self.dwi / f"{f.stem}{FSLOUTTYPE}"
                     if not out_file.is_file():
@@ -781,7 +781,7 @@ class StructuralPreprocessing:
             self.preprocess_anat()
         else:
             print("Structural preprocessing already done. Continuing.")
-        return self.highres,self.highres_brain, self.highres_mask,
+        return self.highres,self.highres_brain, self.highres_mask
 
 
 class PreprocessPipeline:
