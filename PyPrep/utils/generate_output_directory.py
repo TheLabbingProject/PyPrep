@@ -2,7 +2,7 @@ from pathlib import Path
 import glob
 import os
 from logs import messages
-from PyPrep.utils.displayable_path import DisplayablePath
+from .displayable_path import DisplayablePath
 
 
 class GenerateOutputDirectory:

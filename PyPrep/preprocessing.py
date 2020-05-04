@@ -27,12 +27,9 @@ import os
 import shutil
 import subprocess
 import time
-from bids_validator import BIDSValidator
 from pathlib import Path
-from PyPrep.code import dmri_prep_functions as dmri_methods
-from PyPrep.code import fmri_prep_functions as fmri_methods
-from PyPrep.atlases.atlases import Atlases
-from PyPrep.templates.templates import Templates
+from atlases.atlases import Atlases
+from templates.templates import Templates
 from logs import messages
 import logging
 
@@ -1024,6 +1021,6 @@ class PreprocessPipeline:
 
 
 if __name__ == "__main__":
-    bids_dir = Path("~/Desktop/bids_dataset")
+    bids_dir = Path("/Users/dumbeldore/Desktop/bids_dataset")
     bids_prep = PreprocessPipeline(bids_dir, subj="sub-09", skip_bids=True)
     bids_prep.run()

@@ -95,6 +95,7 @@ def list_files(startpath: str):
             if ".DS_Store" not in f:
                 print("{}{}".format(subindent, f))
 
+
 def bet_brain_extract(in_file: Path, out_file: Path = None):
     """
     Perform brain extraction using FSL's BET.
@@ -160,6 +161,7 @@ def merge_phases(in_file: Path, phasediff: Path, merged: Path):
     merger.inputs.merged_file = merged
     return merger
 
+
 def generate_index(epi_file: Path, index_file: Path):
     """
     Generates index.txt file, needed to run eddy-currents corrections.
@@ -173,6 +175,8 @@ def generate_index(epi_file: Path, index_file: Path):
         for i in range(n_frames):
             in_file.write("1\n")
         in_file.close()
+
+
 def generate_datain(AP: Path, PA: Path, datain: Path):
     """
     Generate datain.txt file for topup
@@ -237,6 +241,7 @@ def top_up(merged: Path, datain: Path, fieldmap: Path):
     )
     cmd = f"fslmaths {unwarped} -Tmean {fieldmap_mag}"
     os.system(cmd)
+
 
 class FeatDesign:
     def __init__(

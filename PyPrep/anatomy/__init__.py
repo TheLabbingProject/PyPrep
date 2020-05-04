@@ -1,1 +1,1 @@
-from PyPrep.anatomy.structual_preprocessing import StructuralPreprocessing
+from .structual_preprocessing import StructuralPreprocessing

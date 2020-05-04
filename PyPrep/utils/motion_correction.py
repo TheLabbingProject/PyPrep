@@ -1,5 +1,6 @@
 from pathlib import Path
-from PyPrep.utils.utillities import check_files_existence, FSLOUTTYPE
+from .utillities import FSLOUTTYPE
+from .file_utils import check_files_existence
 from PyPrep.functional import fmri_prep_functions as fmri_methods
 
 

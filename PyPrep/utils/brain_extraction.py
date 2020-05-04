@@ -1,9 +1,9 @@
 from pathlib import Path
-from PyPrep.utils.utillities import (
-    check_files_existence,
+from .utillities import (
     FSLOUTTYPE,
     bet_brain_extract,
 )
+from .file_utils import check_files_existence
 from logs import messages
 
 

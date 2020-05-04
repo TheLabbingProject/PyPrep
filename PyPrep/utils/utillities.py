@@ -144,6 +144,3 @@ def motion_correct(in_file: Path, out_file: Path):
     mcflt.inputs.in_file = in_file
     mcflt.inputs.out_file = out_file
     return mcflt
-
-
-
