@@ -37,7 +37,6 @@ ATLAS = Atlases.megaatlas.value
 DESIGN = Templates.design.value
 # FSLOUTTYPE = ".nii.gz"
 
-
 class PreprocessPipeline:
     def __init__(
         self,
@@ -93,12 +92,6 @@ class PreprocessPipeline:
             phasediff=phasediff,
         )
         return anat, func, sbref, dwi, bvec, bval, phasediff, str_to_print
-
-    def copy_bvec_bval(self, subj: str, bvec: Path, bval: Path):
-        dwi_folder = self.derivatives / subj / "dwi"
-        for file in [bvec, bval]:
-            new_file = dwi_folder / file.name
-            shutil.copy(file, new_file)
 
     def generate_field_map(self, subj: str, AP: Path, PA: Path):
         fieldmap_generator = GenerateFieldMap(subj, AP, PA, self.derivatives)
@@ -215,7 +208,6 @@ class PreprocessPipeline:
                 phasediff,
                 str_to_print,
             ) = self.print_start(subj)
-            self.copy_bvec_bval(subj,bvec,bval)
             logging.basicConfig(
                 filename=self.derivatives / subj / "preprocessing.log",
                 filemode="w",
