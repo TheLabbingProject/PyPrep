@@ -30,12 +30,20 @@ import time
 from pathlib import Path
 from atlases.atlases import Atlases
 from templates.templates import Templates
+<<<<<<< HEAD
 from logs import messages
+=======
+from logs.messages import PRINT_START
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
 import logging
 
 ATLAS = Atlases.megaatlas.value
 DESIGN = Templates.design.value
+<<<<<<< HEAD
 
+=======
+# FSLOUTTYPE = ".nii.gz"
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
 
 class PreprocessPipeline:
     def __init__(
@@ -81,7 +89,11 @@ class PreprocessPipeline:
             bval,
             phasediff,
         ) = fmri_methods.load_initial_files(self.bids_dir, subj)
+<<<<<<< HEAD
         str_to_print = messages.PRINT_START.format(
+=======
+        str_to_print = PRINT_START.format(
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
             subj=subj,
             subj_dir=self.bids_dir / subj,
             anat=anat,
@@ -195,12 +207,15 @@ class PreprocessPipeline:
         if not self.skip_bids:
             self.check_bids()
         for subj in self.subjects:
+<<<<<<< HEAD
             logging.basicConfig(
                 filename=self.derivatives / subj / "preprocessing.log",
                 filemode="w",
                 format="%(asctime)s - %(message)s",
                 level=logging.INFO,
             )
+=======
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
             print(f"Currently preprocessing {subj}'s images.'")
             t = time.time()
             self.generate_output_directory(subj)
@@ -214,6 +229,15 @@ class PreprocessPipeline:
                 phasediff,
                 str_to_print,
             ) = self.print_start(subj)
+<<<<<<< HEAD
+=======
+            logging.basicConfig(
+                filename=self.derivatives / subj / "preprocessing.log",
+                filemode="w",
+                format="%(asctime)s - %(message)s",
+                level=logging.INFO,
+            )
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
             logging.info(str_to_print)
             (
                 fieldmap_rad,
@@ -256,6 +280,12 @@ class PreprocessPipeline:
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     bids_dir = Path("/Users/dumbeldore/Desktop/bids_dataset")
     bids_prep = PreprocessPipeline(bids_dir, subj="sub-09", skip_bids=True)
+=======
+    bids_dir = Path("/home/gal/bids_dataset")
+    derivatives = Path("/home/gal/derivatives_2")
+    bids_prep = PreprocessPipeline(bids_dir, derivatives=derivatives, skip_bids=True)
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
     bids_prep.run()

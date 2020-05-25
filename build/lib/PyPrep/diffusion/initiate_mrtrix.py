@@ -1,7 +1,10 @@
 from pathlib import Path
 from logs import messages
 from PyPrep.diffusion import dmri_prep_functions as dmri_methods
+<<<<<<< HEAD
 import shutil
+=======
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
 
 
 class InitiateMrtrix:
@@ -87,10 +90,13 @@ class InitiateMrtrix:
             new_mask,
             new_PA,
         )
+<<<<<<< HEAD
         for b in [self.bvec, self.bval]:
             new_b = self.mrtrix_dir / b.name
             if not new_b.is_file():
                 shutil.copy(b, new_b)
+=======
+>>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
 
     def run(self):
         if not self.dir_exists:
