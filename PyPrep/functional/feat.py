@@ -24,7 +24,7 @@ class FEAT:
         self.fieldmap_brain = fieldmap_brain
         self.fieldmap_rad = fieldmap_rad
         self.subj_design = derivatives_dir / subj / "scripts" / "func_design.fsf"
-        self.out_feat = derivatives_dir / subj / "func" / "func.feat"
+        self.out_feat = derivatives_dir / subj / "func" / f"{epi_file.name}.feat"
         self.exist = check_files_existence([self.subj_design])
 
     def __str__(self):

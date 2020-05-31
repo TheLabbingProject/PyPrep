@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 from atlases.atlases import Atlases
 from templates.templates import Templates
-from logs.messages import PRINT_START
+from PyPrep.logs.messages import PRINT_START
 import logging
 
 ATLAS = Atlases.megaatlas.value
@@ -215,7 +215,7 @@ class PreprocessPipeline:
                 phasediff,
                 str_to_print,
             ) = self.print_start(subj)
-            self.copy_bvec_bval(subj,bvec,bval)
+            self.copy_bvec_bval(subj, bvec, bval)
             logging.basicConfig(
                 filename=self.derivatives / subj / "preprocessing.log",
                 filemode="w",

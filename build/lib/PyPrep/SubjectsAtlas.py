@@ -15,8 +15,6 @@ ATLAS = Atlases.megaatlas.value
 FSLOUTTYPE = ".nii.gz"
 
 
-<<<<<<< HEAD
-=======
 # class InvertWarp:
 #     def __init__(self, in_file: Path, ref: Path, out_dir: Path, warp: Path):
 #         self.in_file = in_file
@@ -211,7 +209,6 @@ FSLOUTTYPE = ".nii.gz"
 #             ]
 
 
->>>>>>> 960b15460f8400b8039110e5969d16f03ad2c679
 class SubjectsAtlas:
     def __init__(
         self,
@@ -384,3 +381,9 @@ class SubjectsAtlas:
                 ]
             ]
             # self.apply_affine(dwi, labels2highres, aff, out_dir)
+
+
+if __name__ == "__main__":
+    derivatives = Path("/Users/dumbeldore/Desktop/derivatives")
+    sa = SubjectsAtlas(derivatives)
+    sa.run()
