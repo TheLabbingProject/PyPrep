@@ -1,6 +1,6 @@
 # PyPrep
 ## Yaniv Assaf's lab automated preprocessing project.
-![](templates/prep_chart.png) ![](templates/pipeline_example.gif)
+![](PyPrep/templates/prep_chart.png) ![](PyPrep/templates/pipeline_example.gif)
 ### Prepocessing pipeline:
 Diffusion (DWI) preprocessing procedure:
 
